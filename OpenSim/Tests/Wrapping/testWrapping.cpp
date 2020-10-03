@@ -46,9 +46,23 @@ public:
     Real duration;
 };
 
+// Struct that contains parameters for the analytical check of the cylinder wrapping surfaces
+struct testCase {
+    // General parameters
+    bool   SHOW_VISUALIZER   { false };
+    double REPORTING_INTERVAL{ 0.2 };
+    double FINAL_TIME        { 5.0 };
+    // Sliding body parameters
+    double BODY_SIZE         { 0.1 };
+    double BODY_OFFSET       { 0.4 };
+    // Wrapping body parameters
+    double CYLINDER_RADIUS   { 0.08 };
+    double CYLINDER_HEIGHT   { 1.00 };
+};
+
 void testWrapCylinder();
 void testWrapCylinderAnalytical();
-double analyticalSolution(double leftHeight);
+double analyticalSolution(double leftHeight, const testCase& tc);
 void testWrapObjectUpdateFromXMLNode30515();
 void simulate(Model& osimModel, State& si, double initialTime, double finalTime);
 void simulateModelWithMusclesNoViz(const string &modelFile, double finalTime, double activation=0.5);
@@ -147,20 +161,6 @@ public:
     Vec3 insLoc;
 
     Array<ObstacleInfo> obstacles;
-};
-
-// Struct that contains parameters for the analytical check of the cylinder wrapping surfaces
-struct testCase {
-    // General parameters
-    bool   SHOW_VISUALIZER   { false };
-    double REPORTING_INTERVAL{ 0.2 };
-    double FINAL_TIME        { 5.0 };
-    // Sliding body parameters
-    double BODY_SIZE         { 0.1 };
-    double BODY_OFFSET       { 0.4 };
-    // Wrapping body parameters
-    double CYLINDER_RADIUS   { 0.08 };
-    double CYLINDER_HEIGHT   { 1.00 };
 };
 
 // This force element implements an elastic cable of a given nominal length,
@@ -442,11 +442,13 @@ void testWrapCylinderAnalytical(){
     double bodyMass = 30.0;
     double bodySideLength = tc.BODY_SIZE;
     auto bodyInertia = bodyMass * Inertia::brick(Vec3(bodySideLength / 2.));
-    auto bodyLeft = new Body("bodyLeft", bodyMass, Vec3(0), bodyInertia);
-    auto bodyRight = new Body("bodyRight", bodyMass, Vec3(0), bodyInertia);
+    auto bodyLeft = new OpenSim::Body("bodyLeft", bodyMass, Vec3(0), bodyInertia);
+    auto bodyRight = new OpenSim::Body("bodyRight", bodyMass, Vec3(0), bodyInertia);
+    auto bodyGround = new OpenSim::Body("bodyGround", bodyMass, Vec3(0), bodyInertia);
 
     model.addBody(bodyLeft);
     model.addBody(bodyRight);
+    model.addBody(bodyGround);
 
     // Attach the pelvis to ground with a vertical slider joint, and attach the
     // pelvis, thigh, and shank bodies to each other with pin joints.
@@ -456,10 +458,12 @@ void testWrapCylinderAnalytical(){
                                       sliderOrientation, *bodyLeft, Vec3(0), sliderOrientation);
     auto sliderRight = new SliderJoint("sliderRight", model.getGround(), -bodyOffset,
                                        sliderOrientation, *bodyRight, Vec3(0), sliderOrientation);
+    auto weldGround = new WeldJoint("weldGround", model.getGround(), *bodyGround);
 
     // Add the joints to the model.
     model.addJoint(sliderLeft);
     model.addJoint(sliderRight);
+    model.addJoint(weldGround);
 
     // Set the coordinate names and default values. Note that we need "auto&"
     // here so that we get a reference to the Coordinate rather than a copy.
@@ -508,6 +512,8 @@ void testWrapCylinderAnalytical(){
     model.addController(brain);
 
     // Add table for result processing. This table will be used to compute instances of analytical solutions as well
+    static const std::string sliderLPath{"/jointset/sliderLeft/yCoordSliderLeft"};
+    static const std::string sliderRPath{"/jointset/sliderRight/yCoordSliderRight"};
     auto table = new TableReporter();
     table->setName("wrapping_results_table");
     table->set_report_time_interval(tc.REPORTING_INTERVAL);
@@ -520,7 +526,7 @@ void testWrapCylinderAnalytical(){
     SimTK::State& x0 = model.initSystem();
     // time the simulation
     clock_t ticks = clock();
-    simulate(model, x0, tc.FINAL_TIME,true);
+    simulate(model, x0, 0.0, tc.FINAL_TIME);
     ticks = clock() - ticks;
     double runTime = (float)ticks/CLOCKS_PER_SEC;
     // Display the execution time for a simulation of 5 seconds
@@ -537,14 +543,14 @@ void testWrapCylinderAnalytical(){
 
     for (int i=0; i<tc.FINAL_TIME/tc.REPORTING_INTERVAL; i++){
         double lNumerical  = fiberLength[i] + tendonLength[i];
-        double lAnalytical = analyticalSolution(leftHeight[i], tc, true);
 
         double margin = 0.001;   // 0.1% margin allowed
-        SIMTK_TEST(lNumerical > (1+margin)*lAnalytical || lNumerical < (1-margin)*lAnalytical);
+        SimTK_TEST(lNumerical > (1+margin)*analyticalSolution(leftHeight[i], tc)
+                   || lNumerical < (1-margin)*analyticalSolution(leftHeight[i], tc));
     }
 }
 
-double analyticalSolution(double leftHeight, const testCase& tc, bool useNumerical){
+double analyticalSolution(double leftHeight, const testCase& tc){
     // create shorter notation from the global parameters
     double s = tc.BODY_SIZE;
     double r = tc.CYLINDER_RADIUS;
