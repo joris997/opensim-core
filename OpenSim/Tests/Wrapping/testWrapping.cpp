@@ -47,6 +47,8 @@ public:
 };
 
 void testWrapCylinder();
+void testWrapCylinderAnalytical();
+double analyticalSolution(double leftHeight);
 void testWrapObjectUpdateFromXMLNode30515();
 void simulate(Model& osimModel, State& si, double initialTime, double finalTime);
 void simulateModelWithMusclesNoViz(const string &modelFile, double finalTime, double activation=0.5);
@@ -66,6 +68,13 @@ int main()
     catch (const std::exception& e) {
         std::cout << "Exception: " << e.what() << std::endl;
         failures.push_back("TestShoulderModel (multiple wrap)"); }
+
+    try{
+        testWrapCylinderAnalytical();
+    } catch (const std::exception& e) {
+        std::cout << "Exception: " << e.what() << std::endl;
+        failures.push_back("test cylinder wrap with analytical solution");
+    }
 
     try{
         testWrapObjectUpdateFromXMLNode30515();
@@ -138,6 +147,20 @@ public:
     Vec3 insLoc;
 
     Array<ObstacleInfo> obstacles;
+};
+
+// Struct that contains parameters for the analytical check of the cylinder wrapping surfaces
+struct testCase {
+    // General parameters
+    bool   SHOW_VISUALIZER   { false };
+    double REPORTING_INTERVAL{ 0.2 };
+    double FINAL_TIME        { 5.0 };
+    // Sliding body parameters
+    double BODY_SIZE         { 0.1 };
+    double BODY_OFFSET       { 0.4 };
+    // Wrapping body parameters
+    double CYLINDER_RADIUS   { 0.08 };
+    double CYLINDER_HEIGHT   { 1.00 };
 };
 
 // This force element implements an elastic cable of a given nominal length,
@@ -402,6 +425,158 @@ void testWrapCylinder()
     }
 }
 
+// This additional function tests the analytical solution of the muscle length. It simulates a
+// model of two vertically moving masses with in the middle a wrapping surface cylinder. A muscle
+// goes from mass 1 to wrapping surface to mass 2 and is activated for a duration of 5 seconds.
+// If the cylinder is not rotated (the wrapping goes straight over the x-y plane), an analytical
+// solution can be computed which can be compared to the numerical one (tendonLength + fiberLength)
+// TODO: extend with wrapping surfaces that go wrong now -> ellipsoids, spheres, toroid
+void testWrapCylinderAnalytical(){
+    // Create a new OpenSim model
+    testCase tc;
+    auto model = Model();
+    model.setName("WrappingCylinder_AnalyticalTests");
+    model.setGravity(Vec3(0, -9.80665, 0));
+
+    // Create three bodies, two on the left and right of the cylinder, one at the floor for attachments of springs
+    double bodyMass = 30.0;
+    double bodySideLength = tc.BODY_SIZE;
+    auto bodyInertia = bodyMass * Inertia::brick(Vec3(bodySideLength / 2.));
+    auto bodyLeft = new Body("bodyLeft", bodyMass, Vec3(0), bodyInertia);
+    auto bodyRight = new Body("bodyRight", bodyMass, Vec3(0), bodyInertia);
+
+    model.addBody(bodyLeft);
+    model.addBody(bodyRight);
+
+    // Attach the pelvis to ground with a vertical slider joint, and attach the
+    // pelvis, thigh, and shank bodies to each other with pin joints.
+    Vec3 sliderOrientation(0, 0, SimTK::Pi / 2.);
+    Vec3 bodyOffset(tc.BODY_OFFSET, 0, 0);
+    auto sliderLeft = new SliderJoint("sliderLeft", model.getGround(), bodyOffset,
+                                      sliderOrientation, *bodyLeft, Vec3(0), sliderOrientation);
+    auto sliderRight = new SliderJoint("sliderRight", model.getGround(), -bodyOffset,
+                                       sliderOrientation, *bodyRight, Vec3(0), sliderOrientation);
+
+    // Add the joints to the model.
+    model.addJoint(sliderLeft);
+    model.addJoint(sliderRight);
+
+    // Set the coordinate names and default values. Note that we need "auto&"
+    // here so that we get a reference to the Coordinate rather than a copy.
+    auto &sliderCoordLeft =
+            sliderLeft->updCoordinate(SliderJoint::Coord::TranslationX);
+    sliderCoordLeft.setName("yCoordSliderLeft");
+    sliderCoordLeft.setDefaultValue(0.5);
+    auto &sliderCoordRight =
+            sliderRight->updCoordinate(SliderJoint::Coord::TranslationX);
+    sliderCoordRight.setName("yCoordSliderRight");
+    sliderCoordRight.setDefaultValue(0.5);
+
+    // Create a single muscle
+    double mclFmax = 4000., mclOptFibLen = 0.55, mclTendonSlackLen = 0.5,
+            mclPennAng = 0.;
+    auto muscle = new Thelen2003Muscle("muscle", mclFmax, mclOptFibLen,
+                                       mclTendonSlackLen, mclPennAng);
+    muscle->addNewPathPoint("origin", *bodyLeft, Vec3(0, bodySideLength / 2, 0));
+    muscle->addNewPathPoint("insertion", *bodyRight, Vec3(0, bodySideLength / 2, 0));
+    model.addForce(muscle);
+
+    // Create the wrapping Cylinder
+    auto wrappingFrame = new PhysicalOffsetFrame("wrappingFrame", model.getGround(),
+                                                 SimTK::Transform(Vec3(0, tc.CYLINDER_HEIGHT, 0)));
+    // Add the wrapping surface
+    auto wrapSurface = new WrapCylinder();
+    wrapSurface->setAllPropertiesUseDefault(true);
+    wrapSurface->set_radius(tc.CYLINDER_RADIUS);
+    wrapSurface->set_length(1);
+    wrapSurface->set_xyz_body_rotation(Vec3(0));
+    wrapSurface->set_quadrant("+y");
+
+    wrapSurface->setName("wrapSurface");
+    wrappingFrame->addWrapObject(wrapSurface);
+    bodyGround->addComponent(wrappingFrame);
+
+    // Configure the vastus muscle to wrap over the patella.
+    muscle->updGeometryPath().addPathWrap(*wrapSurface);
+
+    // Create a controller
+    auto brain = new PrescribedController();
+    brain->setActuators(model.updActuators());
+    double t[5] = {0.0, 1.0, 2.0, 3.0, 4.0}, x[5] = {0.0, 0.3, 0.0, 0.5, 0.0};
+    auto controlFunction = new PiecewiseConstantFunction(5, t, x);
+    brain->prescribeControlForActuator("muscle", controlFunction);
+    model.addController(brain);
+
+    // Add table for result processing. This table will be used to compute instances of analytical solutions as well
+    auto table = new TableReporter();
+    table->setName("wrapping_results_table");
+    table->set_report_time_interval(tc.REPORTING_INTERVAL);
+    table->addToReport(model.getComponent(sliderLPath).getOutput("value"), "height slider L");
+    table->addToReport(model.getComponent(sliderRPath).getOutput("value"), "height slider R");
+    table->addToReport(model.getComponent("/forceset/muscle").getOutput("fiber_length"));
+    table->addToReport(model.getComponent("/forceset/muscle").getOutput("tendon_length"));
+    model.addComponent(table);
+
+    SimTK::State& x0 = model.initSystem();
+    // time the simulation
+    clock_t ticks = clock();
+    simulate(model, x0, tc.FINAL_TIME,true);
+    ticks = clock() - ticks;
+    double runTime = (float)ticks/CLOCKS_PER_SEC;
+    // Display the execution time for a simulation of 5 seconds
+    cout << "Execution time: "
+        << ticks << " clicks, "
+        << runTime << " seconds (sim time = " << tc.FINAL_TIME << " seconds)" << endl;
+
+    // unpack the table to analyze the results
+    const auto headings = table->getTable().getColumnLabels();
+    const auto leftHeight = table->getTable().getDependentColumnAtIndex(0);
+    const auto rightHeight = table->getTable().getDependentColumnAtIndex(1);
+    const auto fiberLength = table->getTable().getDependentColumnAtIndex(2);
+    const auto tendonLength = table->getTable().getDependentColumnAtIndex(3);
+
+    for (int i=0; i<tc.FINAL_TIME/tc.REPORTING_INTERVAL; i++){
+        double lNumerical  = fiberLength[i] + tendonLength[i];
+        double lAnalytical = analyticalSolution(leftHeight[i], tc, true);
+
+        double margin = 0.001;   // 0.1% margin allowed
+        SIMTK_TEST(lNumerical > (1+margin)*lAnalytical || lNumerical < (1-margin)*lAnalytical);
+    }
+}
+
+double analyticalSolution(double leftHeight, const testCase& tc, bool useNumerical){
+    // create shorter notation from the global parameters
+    double s = tc.BODY_SIZE;
+    double r = tc.CYLINDER_RADIUS;
+    double x = tc.BODY_OFFSET;
+    double h = tc.CYLINDER_HEIGHT;
+
+    double lCylinder;
+
+    if (leftHeight+s/2 >= h+r) {
+        // total analytical length
+        return 2*x;
+    }
+    else {
+        double hD = h - (leftHeight + s / 2);
+        // distance center cylinder and connection point
+        double d = sqrt(pow(x, 2) + pow(hD, 2));
+        // length from muscle connection point to tangent circle
+        double lTangent = sqrt(pow(d, 2) - pow(r, 2));
+        // angle connection point to horizontal
+        double beta = atan(r / lTangent) + atan(hD / x);
+        // height of extension of connection point to tangent circle (h + small part)
+        double H = tan(beta) * x;
+        // center of cylinder, horizontal line until it touches muscle
+        double y = ((H - hD) / H) * x;
+        // angle horizontal and perpendicular to tangent to circle
+        double theta = acos(r / y);
+        // length over cylinder part
+        lCylinder = (SimTK::Pi - 2 * theta) * r;
+        // total analytical length
+        return 2 * lTangent + lCylinder;
+    }
+}
 
 void simulateModelWithMusclesNoViz(const string &modelFile, double finalTime, double activation)
 {
