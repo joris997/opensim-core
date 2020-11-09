@@ -189,13 +189,26 @@ SimTK::Vec3 WrapEllipsoid::getRadii() const
 int WrapEllipsoid::wrapLine(const SimTK::State& s, SimTK::Vec3& aPoint1, SimTK::Vec3& aPoint2,
                                      const PathWrap& aPathWrap, WrapResult& aWrapResult, bool& aFlag) const
 {
+    // ADDITION: keep track of the original aPointi in case you need to change back
+    // before closing the function
+    SimTK::Vec3 aPoint1Old = aPoint1, aPoint2Old = aPoint2;
+
+redo:
     int i, j, bestMu;
     SimTK::Vec3 p1, p2, m, a, p1p2, p1m, p2m, f1, f2, p1c1, r1r2, vs, t, mu;
     double ppm, aa, bb, cc, disc, l1, l2,
         p1e, p2e, vs4, dist, fanWeight = -SimTK::Infinity;
     double t_sv[3][3], t_c1[3][3];
     bool far_side_wrap = false;
-   static SimTK::Vec3 origin(0,0,0);
+    static SimTK::Vec3 origin(0,0,0);
+
+    // ADDITION: for reiteration if p1 p2 connection does not go through ellipse
+    SimTK::Vec3 aP1aP2, aP2aP1, aP1c1, aP2c1, avs1, avs2, ellipseDim;
+    double avs41, avs42, aP1e, aP2e;
+
+    std::cout << "wrapLine" << std::endl;
+    std::cout << "|| aPoint1: [" << aPoint1[0] << "," << aPoint1[1] << "," << aPoint1[2] << "]" << std::endl;
+    std::cout << "|| aPoint1: [" << aPoint2[0] << "," << aPoint2[1] << "," << aPoint2[2] << "]" << std::endl;
 
     // In case you need any variables from the previous wrap, copy them from
     // the PathWrap into the WrapResult, re-normalizing the ones that were
@@ -242,6 +255,7 @@ int WrapEllipsoid::wrapLine(const SimTK::State& s, SimTK::Vec3& aPoint1, SimTK::
     // check if p1 and p2 are inside the ellipsoid
     if (p1e < -0.0001 || p2e < -0.0001)
     {
+        std::cout << "|| p1, p2 inside ellipsoid" << std::endl;
         // p1 or p2 is inside the ellipsoid
         aFlag = false;
         aWrapResult.wrap_path_length = 0.0;
@@ -266,6 +280,7 @@ int WrapEllipsoid::wrapLine(const SimTK::State& s, SimTK::Vec3& aPoint1, SimTK::
 
     if (fabs(ppm) < 0.0001)
     {
+        std::cout << "|| p1m, p2m collinear" << std::endl;
         // vector p1m and p2m are collinear
         aFlag = false;
         aWrapResult.wrap_path_length = 0.0;
@@ -291,20 +306,87 @@ int WrapEllipsoid::wrapLine(const SimTK::State& s, SimTK::Vec3& aPoint1, SimTK::
     cc = Mtx::DotProduct(3, f2, f2) - 1.0;
     disc = SQR(bb) - 4.0 * aa * cc;
 
-    if (disc < 0.0)
-    {
-        // no intersection
-        aFlag = false;
-        aWrapResult.wrap_path_length = 0.0;
+    if (disc < 0.0) {
+        // ADDITION: if not in disk, take points on the line that are closer to
+        // the cylinder and intersect the ellipsoid guaranteed. Then change
+        // aPoint1[i] and use goto statement.
+        std::cout << "|| no intersection disc" << std::endl;
 
-        // transform back to starting coordinate system
-        for (i = 0; i < 3; i++)
-        {
-            aWrapResult.r1[i] /= aWrapResult.factor;
-            aWrapResult.r2[i] /= aWrapResult.factor;
+        // use p1, p2, and c1 to create parameters for the wrapping plane
+        MAKE_3DVECTOR21(aPoint1, aWrapResult.c1, aP1c1);
+        MAKE_3DVECTOR21(aPoint1, aPoint2, aP1aP2);
+        Mtx::CrossProduct(aP1aP2, aP1c1, avs1);
+        Mtx::Normalize(3, avs1, avs1);
+        avs41 = - Mtx::DotProduct(3, avs1, aWrapResult.c1);
+
+        MAKE_3DVECTOR21(aPoint2, aWrapResult.c1, aP2c1);
+        MAKE_3DVECTOR21(aPoint2, aPoint1, aP2aP1);
+        Mtx::CrossProduct(aP2aP1, aP2c1, avs2);
+        Mtx::Normalize(3, avs2, avs2);
+        avs42 = - Mtx::DotProduct(3, avs2, aWrapResult.c1);
+
+        // not normalized ellipsoid dimensions
+        ellipseDim = get_dimensions();
+        // get the tangent point of the wrapping
+        aP1e = -1.0;
+        aP2e = -1.0;
+        for (i = 0; i < 3;i++) {
+            aP1e += SQR((aPoint1[i] - m[i]) / ellipseDim[i]);
+            aP2e += SQR((aPoint2[i] - m[i]) / ellipseDim[i]);
         }
 
-        return noWrap;
+        // initialize to some point on the ellipsoid (need to do this more robust)
+        // so how does the initial first guess for the tangent point relate to the
+        // given parameters?
+//        if (aWrapResult.r1 == && aWrapResult.r2 == SimTK::Vec3(0)){
+        SimTK::Vec3 tangent1(0,ellipseDim[1],0);
+        SimTK::Vec3 tangent2(0,ellipseDim[1],0);
+//        } else {
+//            tangent1 = aWrapResult.r1;
+//            tangent2 = aWrapResult.r2;
+//        }
+        calcTangentPoint(aP1e, tangent1, aPoint1, m, ellipseDim, avs1, avs41);
+        calcTangentPoint(aP1e, tangent2, aPoint2, m, ellipseDim, avs2, avs42);
+        std::cout << "||t1: [" << tangent1[0] << "," << tangent1[1] << "," << tangent1[2] << "]" << std::endl;
+        std::cout << "||t2: [" << tangent2[0] << "," << tangent2[1] << "," << tangent2[2] << "]" << std::endl;
+        tangent2 = tangent1;
+        tangent2[1] = -tangent1[1];
+        std::cout << "||t1: [" << tangent1[0] << "," << tangent1[1] << "," << tangent1[2] << "]" << std::endl;
+        std::cout << "||t2: [" << tangent2[0] << "," << tangent2[1] << "," << tangent2[2] << "]" << std::endl;
+        // interpolate to get the point above the ellipsoid center line between
+        // the tangent of the ellipsoid and p1
+        SimTK::Vec3 tangentVec1 = tangent1-aPoint1;
+        SimTK::Vec3 tangentVec2 = tangent2-aPoint2;
+
+        double fractionTangent1 = (m[0]-aPoint1[0])/(tangent1[0]-aPoint1[0]);
+        double fractionTangent2 = (m[0]-aPoint2[0])/(tangent2[0]-aPoint2[0]);
+        aPoint1 = aPoint1 + fractionTangent1*tangentVec1;
+        aPoint2 = aPoint2 + fractionTangent2*tangentVec2;
+        // force z component to be zero (otherwise side slip possible which still breaks)
+        aPoint1[2] = 0;
+        aPoint2[2] = 0;
+        goto redo;
+
+
+
+//        aPoint1[0] = 0;
+//        aPoint2[0] = 0;
+//        goto redo;
+
+
+
+//        // no intersection
+//        aFlag = false;
+//        aWrapResult.wrap_path_length = 0.0;
+
+//        // transform back to starting coordinate system
+//        for (i = 0; i < 3; i++)
+//        {
+//            aWrapResult.r1[i] /= aWrapResult.factor;
+//            aWrapResult.r2[i] /= aWrapResult.factor;
+//        }
+
+//        return noWrap;
     }
 
     l1 = (-bb + sqrt(disc)) / (2.0 * aa);
@@ -312,6 +394,7 @@ int WrapEllipsoid::wrapLine(const SimTK::State& s, SimTK::Vec3& aPoint1, SimTK::
 
     if ( ! (0.0 < l1 && l1 < 1.0) || ! (0.0 < l2 && l2 < 1.0) )
     {
+        std::cout << "|| no intersection bb" << std::endl;
         // no intersection
         aFlag = false;
         aWrapResult.wrap_path_length = 0.0;
@@ -519,7 +602,7 @@ int WrapEllipsoid::wrapLine(const SimTK::State& s, SimTK::Vec3& aPoint1, SimTK::
 
             if (fanWeight > 0.0)
             {
-                SimTK::Vec3 tc1; 
+                SimTK::Vec3 tc1;
                 double bisection = (orig_c1[_wrapAxis] + aWrapResult.c1[_wrapAxis]) / 2.0;
 
                 aWrapResult.c1[_wrapAxis] = aWrapResult.c1[_wrapAxis] + fanWeight * (bisection - aWrapResult.c1[_wrapAxis]);
@@ -592,6 +675,11 @@ calc_wrap_path:
         aWrapResult.r2[i] /= aWrapResult.factor;
     }
 
+    // ADDITION: get the old aPointi values back to what they used to be
+    // in case of further processing (as they are passed by ref)
+    aPoint1 = aPoint1Old;
+    aPoint2 = aPoint2Old;
+
     return mandatoryWrap;
 }
 
@@ -614,6 +702,7 @@ calc_wrap_path:
 int WrapEllipsoid::calcTangentPoint(double p1e, SimTK::Vec3& r1, SimTK::Vec3& p1, SimTK::Vec3& m,
                                                 SimTK::Vec3& a, SimTK::Vec3& vs, double vs4) const
 {
+    std::cout << "calcTangentPoint" << std::endl;
     int i, j, k, nit, nit2, maxit=50, maxit2=1000;
     Vec3 nr1, p1r1, p1m;
     double d1, v[4], ee[4], ssqo, ssq, pcos, dedth[4][4];
@@ -765,7 +854,7 @@ int WrapEllipsoid::calcTangentPoint(double p1e, SimTK::Vec3& r1, SimTK::Vec3& p1
                 ee[2] = Mtx::DotProduct(3, nr1, r1) + d1;
                 ee[3] = Mtx::DotProduct(3, nr1, p1) + d1;
 
-                ssqo = ssq;     
+                ssqo = ssq;
 
                 ssq = SQR(ee[0]) + SQR(ee[1]) + SQR(ee[2]) + SQR(ee[3]);
 
@@ -790,9 +879,9 @@ int WrapEllipsoid::calcTangentPoint(double p1e, SimTK::Vec3& r1, SimTK::Vec3& p1
             ee[3] = Mtx::DotProduct(3, nr1, p1) + d1;
 
             ssq = SQR(ee[0]) + SQR(ee[1]) + SQR(ee[2]) + SQR(ee[3]);
-            ssqo = ssq;     
+            ssqo = ssq;
         }
-    }   
+    }
     return 1;
 
 }
@@ -811,10 +900,11 @@ int WrapEllipsoid::calcTangentPoint(double p1e, SimTK::Vec3& r1, SimTK::Vec3& p1
  * @param far_side_wrap Whether or not the wrapping is the long way around
  * @param aWrapResult The wrapping results (tangent points, etc.)
  */
-void WrapEllipsoid::CalcDistanceOnEllipsoid(SimTK::Vec3& r1, SimTK::Vec3& r2, SimTK::Vec3& m, SimTK::Vec3& a, 
+void WrapEllipsoid::CalcDistanceOnEllipsoid(SimTK::Vec3& r1, SimTK::Vec3& r2, SimTK::Vec3& m, SimTK::Vec3& a,
                                                           SimTK::Vec3& vs, double vs4, bool far_side_wrap,
                                                           WrapResult& aWrapResult) const
 {
+    std::cout << "CalcDistanceOnEllipsoid" << std::endl;
     int i, j, k, l, imax, numPathSegments;
     SimTK::Vec3 u, ux, a0, ar1, ar2, vsy, vsz, t, r, f1, f2, dr, dv;
     double phi, dphi, phi0, len, mu, aa, bb, cc, mu3, s[500][3], r0[3][3], rphi[3][3], desiredSegLength = 0.001;
@@ -962,7 +1052,7 @@ void WrapEllipsoid::CalcDistanceOnEllipsoid(SimTK::Vec3& r1, SimTK::Vec3& r2, Si
     {
         Vec3 p = aWrapResult.wrap_pts.get(i);
         Vec3 q = aWrapResult.wrap_pts.get(i+1);
-        MAKE_3DVECTOR21(q, p, dv); 
+        MAKE_3DVECTOR21(q, p, dv);
 
         aWrapResult.wrap_path_length += dv.norm(); //Mtx::Magnitude(3, dv);
     }
@@ -995,12 +1085,13 @@ double WrapEllipsoid::findClosestPoint(double a, double b, double c,
                                                     double* x, double* y, double* z,
                                                     int specialCaseAxis) const
 {
+    std::cout << "findClosestPoint" << std::endl;
     // Graphics Gems IV algorithm for computing distance from point to
     // ellipsoid (x/a)^2 + (y/b)^2 +(z/c)^2 = 1.  The algorithm as stated
     // is not stable for points near the coordinate planes.  The first part
     // of this code handles those points separately.
     int i,j;
-    
+
     // handle points near the coordinate planes by reducing the problem
     // to a 2-dimensional pt-to-ellipse.
     //
@@ -1009,7 +1100,7 @@ double WrapEllipsoid::findClosestPoint(double a, double b, double c,
     if (specialCaseAxis < 0)
     {
          double uvw[3], minEllipseRadiiSum = SimTK::Infinity;
-       
+
        uvw[0] = u; uvw[1] = v; uvw[2] = w;
 
        for (i = 0; i < 3; i++)
@@ -1062,7 +1153,7 @@ double WrapEllipsoid::findClosestPoint(double a, double b, double c,
         else
         {
             double max = a;
-        
+
             if ( b > max )
                 max = b;
             if ( c > max )
@@ -1081,17 +1172,17 @@ double WrapEllipsoid::findClosestPoint(double a, double b, double c,
             R = t+c2, _R2 = R*R;
 
             f = P2*Q2*_R2 - a2u2*Q2*_R2 - b2v2*P2*_R2 - c2w2*P2*Q2;
-        
+
             if ( fabs(f) < 1e-09 )
             {
                 *x = a2 * u / P;
                 *y = b2 * v / Q;
                 *z = c2 * w / R;
-            
+
                 dx = *x - u;
                 dy = *y - v;
                 dz = *z - w;
-            
+
                 return sqrt(dx*dx+dy*dy+dz*dz);
             }
 
@@ -1100,7 +1191,7 @@ double WrapEllipsoid::findClosestPoint(double a, double b, double c,
             QR = Q*R;
             PQR = P*Q*R;
             fp = 2.0*(PQR*(QR+PR+PQ)-a2u2*QR*(Q+R)-b2v2*PR*(P+R)-c2w2*PQ*(P+Q));
-        
+
             t -= f/fp;
         }
     }
@@ -1129,6 +1220,7 @@ double WrapEllipsoid::findClosestPoint(double a, double b, double c,
 double WrapEllipsoid::closestPointToEllipse(double a, double b, double u,
                                                           double v, double* x, double* y) const
 {
+    std::cout << "closestPointToEllipse" << std::endl;
     // Graphics Gems IV algorithm for computing distance from point to
     // ellipse (x/a)^2 + (y/b)^2 = 1.  The algorithm as stated is not stable
     // for points near the coordinate axes.  The first part of this code
@@ -1207,7 +1299,7 @@ double WrapEllipsoid::closestPointToEllipse(double a, double b, double u,
         double max = a;
 
         //which = 1;
-        
+
         if ( b > max )
             max = b;
 
@@ -1236,12 +1328,11 @@ double WrapEllipsoid::closestPointToEllipse(double a, double b, double u,
 
     return sqrt(dx*dx + dy*dy);
 }
-// Implement generateDecorations by WrapEllipsoid to replace the previous out of place implementation 
+// Implement generateDecorations by WrapEllipsoid to replace the previous out of place implementation
 // in ModelVisualizer
 void WrapEllipsoid::generateDecorations(bool fixed, const ModelDisplayHints& hints, const SimTK::State& state,
-    SimTK::Array_<SimTK::DecorativeGeometry>& appendToThis) const 
+    SimTK::Array_<SimTK::DecorativeGeometry>& appendToThis) const
 {
-
     Super::generateDecorations(fixed, hints, state, appendToThis);
     if (!fixed) return;
 
@@ -1249,7 +1340,7 @@ void WrapEllipsoid::generateDecorations(bool fixed, const ModelDisplayHints& hin
         const Appearance& defaultAppearance = get_Appearance();
         if (!defaultAppearance.get_visible()) return;
         const Vec3 color = defaultAppearance.get_color();
-        
+
         const auto X_BP = calcWrapGeometryTransformInBaseFrame();
         appendToThis.push_back(
             SimTK::DecorativeEllipsoid(getRadii())
