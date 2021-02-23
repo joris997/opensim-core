@@ -139,7 +139,6 @@ ForwardTool(const ForwardTool &aTool) :
 void ForwardTool::setNull()
 {
     setupProperties();
-
     // BASIC
     _statesFileName = "";
     _useSpecifiedDt = false;
@@ -306,6 +305,7 @@ bool ForwardTool::run()
 
         log_info("Integrating from {} to {}.", _ti, _tf);
         s.setTime(_ti);
+        manager.setIntegratorMethod(OpenSim::Manager::IntegratorMethod(_intType));
         manager.initialize(s);
         manager.integrate(_tf);
     } catch(const std::exception& x) {
