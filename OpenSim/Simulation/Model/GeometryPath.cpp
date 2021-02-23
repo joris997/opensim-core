@@ -448,11 +448,11 @@ void GeometryPath::updateGeometry(const SimTK::State& s) const
  *
  * @return Total length of the path.
  */
-double GeometryPath::getLength( const SimTK::State& s) const
-{
-    computePath(s);  // compute checks if path needs to be recomputed
-    return( getCacheVariableValue<double>(s, "length") );
-}
+//double GeometryPath::getLength( const SimTK::State& s) const
+//{
+//    computePath(s);  // compute checks if path needs to be recomputed
+//    return( getCacheVariableValue<double>(s, "length") );
+//}
 
 void GeometryPath::setLength( const SimTK::State& s, double length ) const
 {
@@ -475,11 +475,11 @@ Vec3 GeometryPath::getColor(const SimTK::State& s) const
  *
  * @return lengthening speed of the path.
  */
-double GeometryPath::getLengtheningSpeed( const SimTK::State& s) const
-{
-    computeLengtheningSpeed(s);
-    return getCacheVariableValue<double>(s, "speed");
-}
+//double GeometryPath::getLengtheningSpeed( const SimTK::State& s) const
+//{
+//    computeLengtheningSpeed(s);
+//    return getCacheVariableValue<double>(s, "speed");
+//}
 void GeometryPath::setLengtheningSpeed( const SimTK::State& s, double speed ) const
 {
     setCacheVariableValue<double>(s, "speed", speed);    

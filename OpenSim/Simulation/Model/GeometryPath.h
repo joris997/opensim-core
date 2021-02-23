@@ -56,7 +56,7 @@ class WrapObject;
  * @version 1.0
  */
 class OSIMSIMULATION_API GeometryPath : public ModelComponent {
-OpenSim_DECLARE_CONCRETE_OBJECT(GeometryPath, ModelComponent);
+OpenSim_DECLARE_ABSTRACT_OBJECT(GeometryPath, ModelComponent);
     //=============================================================================
     // OUTPUTS
     //=============================================================================
@@ -149,13 +149,13 @@ public:
     @see setDefaultColor() **/
     SimTK::Vec3 getColor(const SimTK::State& s) const;
 
-    double getLength( const SimTK::State& s) const;
+    virtual double getLength( const SimTK::State& s) const = 0;
     void setLength( const SimTK::State& s, double length) const;
     double getPreScaleLength( const SimTK::State& s) const;
     void setPreScaleLength( const SimTK::State& s, double preScaleLength);
     const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const;
 
-    double getLengtheningSpeed(const SimTK::State& s) const;
+    virtual double getLengtheningSpeed(const SimTK::State& s) const = 0;
     void setLengtheningSpeed( const SimTK::State& s, double speed ) const;
 
     /** get the path as PointForceDirections directions, which can be used
