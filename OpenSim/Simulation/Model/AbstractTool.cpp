@@ -62,6 +62,7 @@ AbstractTool::AbstractTool():
     _ti(_tiProp.getValueDbl()),
     _tf(_tfProp.getValueDbl()),
     _solveForEquilibriumForAuxiliaryStates(_solveForEquilibriumForAuxiliaryStatesProp.getValueBool()),
+    _intType(_intTypeProp.getValueInt()),
     _maxSteps(_maxStepsProp.getValueInt()),
     _maxDT(_maxDTProp.getValueDbl()),
     _minDT(_minDTProp.getValueDbl()),
@@ -94,6 +95,7 @@ AbstractTool::AbstractTool(const string &aFileName, bool aUpdateFromXMLNode):
     _ti(_tiProp.getValueDbl()),
     _tf(_tfProp.getValueDbl()),
     _solveForEquilibriumForAuxiliaryStates(_solveForEquilibriumForAuxiliaryStatesProp.getValueBool()),
+    _intType(_intTypeProp.getValueInt()),
     _maxSteps(_maxStepsProp.getValueInt()),
     _maxDT(_maxDTProp.getValueDbl()),
     _minDT(_minDTProp.getValueDbl()),
@@ -156,6 +158,7 @@ AbstractTool::AbstractTool(const AbstractTool &aTool):
     _ti(_tiProp.getValueDbl()),
     _tf(_tfProp.getValueDbl()),
     _solveForEquilibriumForAuxiliaryStates(_solveForEquilibriumForAuxiliaryStatesProp.getValueBool()),
+    _intType(_intTypeProp.getValueInt()),
     _maxSteps(_maxStepsProp.getValueInt()),
     _maxDT(_maxDTProp.getValueDbl()),
     _minDT(_minDTProp.getValueDbl()),
@@ -189,6 +192,7 @@ setNull()
     _ti = 0.0;
     _tf = 1.0;
     _solveForEquilibriumForAuxiliaryStates = false;
+    _intType = 4;
     _maxSteps = 20000;
     _maxDT = 1.0;
     _minDT = 1.0e-8;
@@ -246,6 +250,11 @@ void AbstractTool::setupProperties()
     _solveForEquilibriumForAuxiliaryStatesProp.setComment(comment);
     _solveForEquilibriumForAuxiliaryStatesProp.setName("solve_for_equilibrium_for_auxiliary_states");
     _propertySet.append( &_solveForEquilibriumForAuxiliaryStatesProp );
+
+    comment = "Type of integrator used.";
+    _intTypeProp.setComment(comment);
+    _intTypeProp.setName("type_of_integrator");
+    _propertySet.append( &_intTypeProp );
 
     comment = "Maximum number of integrator steps.";
     _maxStepsProp.setComment(comment);
@@ -310,6 +319,7 @@ operator=(const AbstractTool &aTool)
     _ti = aTool._ti;
     _tf = aTool._tf;
     _solveForEquilibriumForAuxiliaryStates = aTool._solveForEquilibriumForAuxiliaryStates;
+    _intType = aTool._intType;
     _maxSteps = aTool._maxSteps;
     _maxDT = aTool._maxDT;
     _minDT = aTool._minDT;

@@ -95,6 +95,10 @@ protected:
     OpenSim::PropertyBool _solveForEquilibriumForAuxiliaryStatesProp;
     bool &_solveForEquilibriumForAuxiliaryStates;
     
+    /** Type of integrator used. */
+    PropertyInt _intTypeProp;
+    int &_intType;
+
     /** Maximum number of steps for the integrator. */
     PropertyInt _maxStepsProp;
     int &_maxSteps;
@@ -291,6 +295,9 @@ public:
     void setStartTime(const double aStartTime) { _ti=aStartTime; } // deprecated: should use "initial" instead of "start"
 
     // Integrator settings
+    int getIntegratorType() const { return _intType; }
+    void setIntegratorType(int type) { _intType = type; }
+
     int getMaximumNumberOfSteps() const { return _maxSteps; }
     void setMaximumNumberOfSteps(int aMaxSteps) { _maxSteps = aMaxSteps; }
 
