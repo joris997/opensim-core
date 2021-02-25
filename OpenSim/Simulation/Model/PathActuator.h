@@ -48,7 +48,6 @@ public:
 //=============================================================================
 // PROPERTIES
 //=============================================================================
-    std::unique_ptr<GeometryPath> path;
     OpenSim_DECLARE_UNNAMED_PROPERTY(GeometryPath,
         "The set of points defining the path of the actuator.");
     OpenSim_DECLARE_PROPERTY(optimal_force, double,
@@ -70,7 +69,7 @@ public:
     // Path
     GeometryPath& updGeometryPath() { return upd_GeometryPath(); }
     const GeometryPath& getGeometryPath() const 
-    {   return get_GeometryPath(); }
+    {  return get_GeometryPath(); }
     bool hasGeometryPath() const override { return true;};
 
     // OPTIMAL FORCE

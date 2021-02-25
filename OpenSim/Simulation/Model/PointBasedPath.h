@@ -1,7 +1,7 @@
 #ifndef OPENSIM_POINTBASED_PATH_H_
 #define OPENSIM_POINTBASED_PATH_H_
 
-#include "GeometryPath.h";
+#include "GeometryPath.h"
 
 #ifdef SWIG
     #ifdef OSIMSIMULATION_API
@@ -18,9 +18,9 @@ class ScaleSet;
 class WrapResult;
 class WrapObject;
 
-class PointBasedPath : public GeometryPath {
+class OSIMSIMULATION_API PointBasedPath : public GeometryPath {
 //class OSIMSIMULATION_API PointBasedPath : public GeometryPath {
-//    OpenSim_DECLARE_CONCRETE_OBJECT(PointBasedPath, GeometryPath);
+    OpenSim_DECLARE_CONCRETE_OBJECT(PointBasedPath, GeometryPath);
 
 //    OpenSim_DECLARE_OUTPUT(length, double,
 //                           getLength, SimTK::Stage::Position);

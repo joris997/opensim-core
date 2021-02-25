@@ -15,12 +15,14 @@ using SimTK::Vec3;
 
 double PointBasedPath::getLength( const SimTK::State& s) const
 {
-    computePath(s);
-    return ( getCacheVariableValue<double>(s, "length") );
+//    computePath(s);
+//    return ( getCacheVariableValue<double>(s, "length") );
+    return 0.0;
 }
 
 double PointBasedPath::getLengtheningSpeed( const SimTK::State& s) const
 {
-    computeLengtheningSpeed(s);
-    return getCacheVariableValue<double>(s, "speed");
+//    computeLengtheningSpeed(s);
+//    return getCacheVariableValue<double>(s, "speed");
+    return 0.0;
 }

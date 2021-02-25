@@ -62,7 +62,7 @@ void PathActuator::setNull()
  */
 void PathActuator::constructProperties()
 {
-    constructProperty_GeometryPath(GeometryPath());
+//    constructProperty_GeometryPath(GeometryPath());
     constructProperty_optimal_force(1.0);
 }
 
@@ -107,8 +107,8 @@ double PathActuator::getOptimalForce() const
  */
 double PathActuator::getLength(const SimTK::State& s) const
 {
-    return path->getLength(s);
-//    return getGeometryPath().getLength(s);
+//    return path->getLength(s);
+    return getGeometryPath().getLength(s);
 }
 //_____________________________________________________________________________
 /**
@@ -118,8 +118,8 @@ double PathActuator::getLength(const SimTK::State& s) const
  */
 double PathActuator::getLengtheningSpeed(const SimTK::State& s) const
 {
-    return path->getLengtheningSpeed(s);
-//    return getGeometryPath().getLengtheningSpeed(s);
+//    return path->getLengtheningSpeed(s);
+    return getGeometryPath().getLengtheningSpeed(s);
 }
 //_____________________________________________________________________________
 /**

@@ -1,8 +1,8 @@
 #ifndef OPENSIM_FUNCTIONBASED_PATH_H_
 #define OPENSIM_FUNCTIONBASED_PATH_H_
 
-#include "GeometryPath.h";
-#include "Interpolate.h";
+#include "GeometryPath.h"
+#include "Interpolate.h"
 
 #ifdef SWIG
     #ifdef OSIMSIMULATION_API
@@ -19,9 +19,9 @@ class ScaleSet;
 class WrapResult;
 class WrapObject;
 
-class FunctionBasedPath : public GeometryPath {
+class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
 //class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
-//    OpenSim_DECLARE_CONCRETE_OBJECT(FunctionBasedPath, GeometryPath);
+    OpenSim_DECLARE_CONCRETE_OBJECT(FunctionBasedPath, GeometryPath);
 
 //    OpenSim_DECLARE_OUTPUT(length, double,
 //                           getLength, SimTK::Stage::Position);
@@ -40,3 +40,5 @@ public:
 }
 
 #endif
+// might need to make setLength etc. also virtual
+// or make everything virtual (just for concept)

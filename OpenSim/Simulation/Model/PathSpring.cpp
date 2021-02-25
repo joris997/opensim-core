@@ -64,7 +64,7 @@ PathSpring::PathSpring(const string& name, double restLength,
 void PathSpring::constructProperties()
 {
     setAuthors("Ajay Seth");
-    constructProperty_GeometryPath(GeometryPath());
+//    constructProperty_GeometryPath(GeometryPath());
     constructProperty_resting_length(SimTK::NaN);
     constructProperty_stiffness(SimTK::NaN);
     constructProperty_dissipation(SimTK::NaN);
