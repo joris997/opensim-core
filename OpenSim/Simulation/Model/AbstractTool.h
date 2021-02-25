@@ -298,8 +298,8 @@ public:
     void setStartTime(const double aStartTime) { _ti=aStartTime; } // deprecated: should use "initial" instead of "start"
 
     // Integrator settings
-    int getIntegratorType() const { return _intType; }
-    void setIntegratorType(int type) { _intType = type; }
+    int getIntegratorMethod() const { return _intType; }
+    void setIntegratorMethod(int type) { _intType = type; }
 
     int getMaximumNumberOfSteps() const { return _maxSteps; }
     void setMaximumNumberOfSteps(int aMaxSteps) { _maxSteps = aMaxSteps; }
