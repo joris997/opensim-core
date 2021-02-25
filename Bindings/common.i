@@ -11,6 +11,8 @@
 %include <OpenSim/Common/About.h>
 %include <OpenSim/Common/Exception.h>
 
+%include <OpenSim/Common/CommonUtilities.h>
+
 %shared_ptr(OpenSim::LogSink);
 %shared_ptr(OpenSim::StringLogSink);
 %include <OpenSim/Common/LogSink.h>
@@ -36,6 +38,7 @@
 %include <OpenSim/Common/Storage.h>
 %template(ArrayStorage) OpenSim::ArrayPtrs<OpenSim::Storage>;
 %include <OpenSim/Common/Units.h>
+%ignore OpenSim::IO::CwdChanger;
 %include <OpenSim/Common/IO.h>
 %include <OpenSim/Common/Function.h>
 
@@ -52,6 +55,7 @@
 %include <OpenSim/Common/GCVSpline.h>
 %include <OpenSim/Common/Sine.h>
 %include <OpenSim/Common/PolynomialFunction.h>
+%include <OpenSim/Common/MultivariatePolynomialFunction.h>
 
 %include <OpenSim/Common/SmoothSegmentedFunctionFactory.h>
 %include <OpenSim/Common/SmoothSegmentedFunction.h>
@@ -109,7 +113,6 @@ namespace OpenSim {
 // Can't wrap the return type of this function.
 %ignore OpenSim::Component::getOutputs;
 
-%include <OpenSim/Common/Path.h>
 %include <OpenSim/Common/ComponentPath.h>
 
 %include <OpenSim/Common/Component.h>
@@ -337,6 +340,7 @@ DATATABLE_CLONE(double, SimTK::Rotation_<double>)
 %include <OpenSim/Common/AbstractDataTable.h>
 %include <OpenSim/Common/DataTable.h>
 %include <OpenSim/Common/TimeSeriesTable.h>
+%include <OpenSim/Common/TableUtilities.h>
 
 %template(DataTable)           OpenSim::DataTable_<double, double>;
 %template(DataTableVec3)       OpenSim::DataTable_<double, SimTK::Vec3>;

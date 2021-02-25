@@ -25,6 +25,7 @@
 
 #include "Model/AnalysisSet.h"
 #include "Model/Bhargava2004MuscleMetabolicsProbe.h"
+#include "Model/Bhargava2004SmoothedMuscleMetabolics.h"
 #include "Model/Model.h"
 #include "Model/ModelVisualizer.h"
 #include "Model/ForceSet.h"
@@ -123,6 +124,7 @@
 #include "Solver.h"
 #include "StatesTrajectory.h"
 #include "StatesTrajectoryReporter.h"
+#include "TableProcessor.h"
 #include "OpenSense/OpenSenseUtilities.h"
 
 #include "SimulationUtilities.h"

@@ -394,9 +394,7 @@ bool CMCTool::run()
     // OUTPUT DIRECTORY
     // Do the maneuver to change then restore working directory 
     // so that the parsing code behaves properly if called from a different directory
-    string saveWorkingDirectory = IO::getCwd();
-    string directoryOfSetupFile = IO::getParentDirectory(getDocumentFileName());
-    IO::chDir(directoryOfSetupFile);
+    auto cwd = IO::CwdChanger::changeToParentOf(getDocumentFileName());
 
     try {
 
@@ -427,13 +425,14 @@ bool CMCTool::run()
     SimTK::State& s = _model->initSystem();
     _model->getMultibodySystem().realize(s, Stage::Position );
      taskSet.setModel(*_model);
-    _model->equilibrateMuscles(s);
-  
+    if (_solveForEquilibriumForAuxiliaryStates) {
+         _model->equilibrateMuscles(s);
+    }
+
     // ---- INPUT ----
     // DESIRED POINTS AND KINEMATICS
     if(_desiredPointsFileName=="" && _desiredKinematicsFileName=="") {
         log_error("A desired points file and desired kinematics file were not specified.");
-        IO::chDir(saveWorkingDirectory);
         return false;
     }
 
@@ -534,7 +533,6 @@ bool CMCTool::run()
      // TASK SET
     if(_taskSetFileName=="") {  
         log_error("A task set was not specified.");
-        IO::chDir(saveWorkingDirectory);         
         return false;        
     }
 
@@ -761,7 +759,7 @@ bool CMCTool::run()
     // Initial auxiliary states
     time_t startTime,finishTime;
     double elapsedTime;
-    if( s.getNZ() > 0) { // If there are actuator states (i.e. muscles dynamics)
+    if(s.getNZ() > 0) { // If there are actuator states (i.e. muscles dynamics)
         log_info("-----------------------------------------------------------------");
         log_info("Computing initial values for muscles states (activation, length):");
         log_info("-----------------------------------------------------------------");
@@ -776,12 +774,10 @@ bool CMCTool::run()
         catch(const Exception& x) {
         // TODO: eventually might want to allow writing of partial results
             x.print(cout);
-            IO::chDir(saveWorkingDirectory);
             return false;
         }
         catch(...) {
             // TODO: eventually might want to allow writing of partial results
-            IO::chDir(saveWorkingDirectory);
             // close open files if we die prematurely (e.g. Opt fail)
             return false;
         }
@@ -835,14 +831,12 @@ bool CMCTool::run()
     catch(const Exception& x) {
         // TODO: eventually might want to allow writing of partial results
         x.print(cout);
-        IO::chDir(saveWorkingDirectory);
         // close open files if we die prematurely (e.g. Opt fail)
         manager.getStateStorage().print(getResultsDir() + "/" + getName() + "_states.sto");
         return false;
     }
     catch(...) {
         // TODO: eventually might want to allow writing of partial results
-        IO::chDir(saveWorkingDirectory);
         // close open files if we die prematurely (e.g. Opt fail)
         manager.getStateStorage().print(getResultsDir() + "/" + getName() + "_states.sto");
         return false;
@@ -879,13 +873,10 @@ bool CMCTool::run()
     } catch(const Exception& x) {
         // TODO: eventually might want to allow writing of partial results
         x.print(cout);
-        IO::chDir(saveWorkingDirectory);
         // close open files if we die prematurely (e.g. Opt fail)
         
         return false;
     }
-
-    IO::chDir(saveWorkingDirectory);
 
     return true;
 }

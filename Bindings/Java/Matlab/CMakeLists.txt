@@ -7,7 +7,7 @@ endif()
 
 # Install.
 # --------
-install(DIRECTORY examples/ DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}/Examples")
+install(DIRECTORY examples/ DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}")
 install(DIRECTORY Hopper_Device DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}")
 install(DIRECTORY Utilities DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}")
 install(DIRECTORY OpenSenseExample DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}")
@@ -26,8 +26,7 @@ install(DIRECTORY Dynamic_Walking_Tutorials/Dynamic_Walker_Challenge
         PATTERN "OpenSimPlantControlsFunction.m" EXCLUDE
         PATTERN "OpenSimPlantFunction.m" EXCLUDE
         PATTERN "Simulation_using_Matlab_Integration.m" EXCLUDE)
-
-
+install(DIRECTORY CustomStaticOptimization DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}")
 
 # Remove parts from the hopper device example that the tutorial audience is
 # expected to fill in.
@@ -56,6 +55,11 @@ foreach(fname RunHopper RunHopperWithDevice)
     install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/Hopper_Device/${fname}.m"
             DESTINATION "${OPENSIM_INSTALL_MATLABEXDIR}/Hopper_Device")
 endforeach()
+
+# Copy example model and data files to use in Examples.
+file(COPY "examples/Moco/exampleSquatToStand/squatToStand_3dof9musc.osim"
+        DESTINATION
+        "${CMAKE_BINARY_DIR}/Examples/Moco/exampleSquatToStand")
 
 # The configureOpenSim.m script contains paths into the OpenSim installation
 # that may be different on different platforms, so we configure it with CMake

@@ -40,6 +40,7 @@
 #include <OpenSim/Simulation/Model/ActuatorForceProbe.h>
 #include <OpenSim/Simulation/Model/MuscleActiveFiberPowerProbe.h>
 #include <OpenSim/Simulation/Model/Bhargava2004MuscleMetabolicsProbe.h>
+#include <OpenSim/Simulation/Model/Bhargava2004SmoothedMuscleMetabolics.h>
 #include <OpenSim/Simulation/Model/Umberger2010MuscleMetabolicsProbe.h>
 
 #include <OpenSim/Simulation/Model/ModelVisualizer.h>
@@ -98,6 +99,7 @@
 #include <OpenSim/Simulation/SimbodyEngine/GimbalJoint.h>
 #include <OpenSim/Simulation/SimbodyEngine/UniversalJoint.h>
 #include <OpenSim/Simulation/SimbodyEngine/PlanarJoint.h>
+#include <OpenSim/Simulation/SimbodyEngine/ScapulothoracicJoint.h>
 #include <OpenSim/Simulation/Model/JointSet.h>
 
 #include <OpenSim/Simulation/Model/Marker.h>
@@ -146,6 +148,8 @@
 
 #include <OpenSim/Simulation/SimulationUtilities.h>
 #include <OpenSim/Simulation/VisualizerUtilities.h>
+
+#include <OpenSim/Simulation/TableProcessor.h>
 
 #include <OpenSim/Actuators/osimActuatorsDLL.h>
 #include <OpenSim/Actuators/MuscleFixedWidthPennationModel.h>

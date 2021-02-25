@@ -86,8 +86,8 @@ bool IMUPlacer::run(bool visualizeResults) {
 
     _calibrated = false;
     // Check there's a model file specified before trying to open it
-    if (get_model_file().size() == 0) {
-        OPENSIM_THROW(Exception, "No model file specified for IMUPlacer.");
+    if (_model.empty() && get_model_file().size() == 0) {
+        OPENSIM_THROW(Exception, "No model or model_file was specified for IMUPlacer.");
     }
     if (_model.empty()) { _model.reset(new Model(get_model_file())); }
     TimeSeriesTable_<SimTK::Quaternion> quatTable(
@@ -102,6 +102,9 @@ bool IMUPlacer::run(bool visualizeResults) {
                     sensor_to_opensim_rotations[2], SimTK::ZAxis);
     // Rotate data so Y-Axis is up
     OpenSenseUtilities::rotateOrientationTable(quatTable, sensorToOpenSim);
+    // Heading correction requires initSystem is already called. Do it now.
+    SimTK::State& s0 = _model->initSystem();
+    _model->realizePosition(s0);
     // Check consistent heading correction specification
     // both base_heading_axis and base_imu_label should be specified
     // finer error checking is done downstream
@@ -131,7 +134,7 @@ bool IMUPlacer::run(bool visualizeResults) {
         // Compute rotation matrix so that (e.g. "pelvis_imu"+ SimTK::ZAxis)
         // lines up with model forward (+X)
         SimTK::Vec3 headingRotationVec3 =
-                OpenSenseUtilities::computeHeadingCorrection(*_model, quatTable,
+                OpenSenseUtilities::computeHeadingCorrection(*_model, s0, quatTable,
                         get_base_imu_label(), directionOnIMU);
         SimTK::Rotation headingRotation(
                 SimTK::BodyOrSpaceType::SpaceRotationSequence,
@@ -154,7 +157,6 @@ bool IMUPlacer::run(bool visualizeResults) {
     // the labels in the TimerSeriesTable of orientations
     auto rotations = orientationsData.updRowAtIndex(0);
 
-    SimTK::State& s0 = _model->initSystem();
     s0.updTime() = times[0];
 
     // default pose of the model defined by marker-based IK
@@ -165,6 +167,7 @@ bool IMUPlacer::run(bool visualizeResults) {
     std::map<std::string, SimTK::Rotation> imuBodiesInGround;
 
     // First compute the transform of each of the imu bodies in ground
+    int cnt = 0; // check name match between data and model frames
     for (auto& imuName : imuLabels) {
         auto ix = imuName.rfind("_imu");
         if (ix != std::string::npos) {
@@ -173,11 +176,21 @@ bool IMUPlacer::run(bool visualizeResults) {
             if (body) {
                 bodies[imuix] = const_cast<PhysicalFrame*>(body);
                 imuBodiesInGround[imuName] = body->getTransformInGround(s0).R();
+                cnt++;
             }
         }
         ++imuix;
     }
-
+    // we check cnt >= 1 since no frames is rather meaningless I think
+    // -Ayman 10/20
+    if (cnt < 1) {
+        log_error("IMUPlacer: Calibration data does not "
+                  "correspond to any model frames. "
+                  "Column names must formatted as (bodyname)_imu");
+        throw Exception("IMUPlacer: Calibration data does not "
+                        "correspond to any model frames."
+                        "Column names must formatted as (bodyname)_imu");
+    }
     // Now cycle through each imu with a body and compute the relative
     // offset of the IMU measurement relative to the body and
     // update the modelOffset OR add an offset if none exists
@@ -230,12 +243,12 @@ bool IMUPlacer::run(bool visualizeResults) {
         s.updTime() = times[0];
 
         // create the solver given the input data
-        MarkersReference mRefs{};
         OrientationsReference oRefs(orientationsData);
         SimTK::Array_<CoordinateReference> coordRefs{};
 
         const double accuracy = 1e-4;
-        InverseKinematicsSolver ikSolver(*_model, mRefs, oRefs, coordRefs);
+        InverseKinematicsSolver ikSolver(*_model, nullptr,
+                std::make_shared<OrientationsReference>(oRefs), coordRefs);
         ikSolver.setAccuracy(accuracy);
 
         SimTK::Visualizer& viz = _model->updVisualizer().updSimbodyVisualizer();
