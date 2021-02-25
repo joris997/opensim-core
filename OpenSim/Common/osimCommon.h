@@ -37,12 +37,12 @@
 #include "Logger.h"
 #include "ModelDisplayHints.h"
 #include "MultiplierFunction.h"
+#include "MultivariatePolynomialFunction.h"
 #include "Object.h"
 #include "ObjectGroup.h"
 #include "PiecewiseConstantFunction.h"
 #include "PiecewiseLinearFunction.h"
 #include "PolynomialFunction.h"
-#include "RegisterTypes_osimCommon.h"
 #include "RegisterTypes_osimCommon.h" // to expose RegisterTypes_osimCommon
 #include "Reporter.h"
 #include "Scale.h"
@@ -55,6 +55,7 @@
 #include "Stopwatch.h"
 #include "StorageInterface.h"
 #include "TableSource.h"
+#include "TableUtilities.h"
 #include "TimeSeriesTable.h"
 
 #endif // OPENSIM_OSIMCOMMON_H_
