@@ -91,6 +91,7 @@ OpenSim::ModelComponentSet<OpenSim::Constraint>;
 %include <OpenSim/Simulation/SimbodyEngine/GimbalJoint.h>
 %include <OpenSim/Simulation/SimbodyEngine/UniversalJoint.h>
 %include <OpenSim/Simulation/SimbodyEngine/PlanarJoint.h>
+%include <OpenSim/Simulation/SimbodyEngine/ScapulothoracicJoint.h>
 
 %include <OpenSim/Simulation/SimbodyEngine/WeldConstraint.h>
 %include <OpenSim/Simulation/SimbodyEngine/PointConstraint.h>
@@ -171,6 +172,7 @@ OpenSim::ModelComponentSet<OpenSim::Controller>;
 %include <OpenSim/Simulation/Model/ActuatorForceProbe.h>
 %include <OpenSim/Simulation/Model/MuscleActiveFiberPowerProbe.h>
 %include <OpenSim/Simulation/Model/Bhargava2004MuscleMetabolicsProbe.h>
+%include <OpenSim/Simulation/Model/Bhargava2004SmoothedMuscleMetabolics.h>
 %include <OpenSim/Simulation/Model/Umberger2010MuscleMetabolicsProbe.h>
 %include <OpenSim/Simulation/Model/ModelVisualPreferences.h>
 %include <OpenSim/Simulation/Model/ModelVisualizer.h>
@@ -205,19 +207,28 @@ OpenSim::ModelComponentSet<OpenSim::Controller>;
 %include <OpenSim/Simulation/Model/ExpressionBasedBushingForce.h>
 
 %include <OpenSim/Simulation/Solver.h>
-%include <OpenSim/Simulation/Reference.h>
 
+%include <OpenSim/Simulation/Reference.h>
 %template(ReferenceVec3) OpenSim::Reference_<SimTK::Vec3>;
 %template(ReferenceDouble) OpenSim::Reference_<double>;
 %template(ReferenceRotation) OpenSim::Reference_<SimTK::Rotation_<double>>;
+%template(StreamableReferenceRotation) OpenSim::StreamableReference_<SimTK::Rotation_<double>>;
+
 %template(SimTKArrayCoordinateReference) SimTK::Array_<OpenSim::CoordinateReference>;
 
 
+%shared_ptr(ReferenceVec3);
+%shared_ptr(ReferenceDouble);
+%shared_ptr(ReferenceRotation);
 %include <OpenSim/Simulation/MarkersReference.h>
+//%shared_ptr(OpenSim::MarkersReference);
 %template(SetMarkerWeights) OpenSim::Set<MarkerWeight, OpenSim::Object>;
 %include <OpenSim/Simulation/CoordinateReference.h>
-%template (SetOientationWeights) OpenSim::Set<OrientationWeight, OpenSim::Object>;
 %include <OpenSim/Simulation/OrientationsReference.h>
+%template (SetOientationWeights) OpenSim::Set<OrientationWeight, OpenSim::Object>;
+%shared_ptr(OpenSim::OrientationsReference);
+%include <OpenSim/Simulation/BufferedOrientationsReference.h>
+%shared_ptr(OpenSim::BufferedOrientationsReference);
 
 %include <OpenSim/Simulation/AssemblySolver.h>
 %include <OpenSim/Simulation/InverseKinematicsSolver.h>
@@ -231,7 +242,13 @@ OpenSim::ModelComponentSet<OpenSim::Controller>;
 %include <OpenSim/Simulation/StatesTrajectoryReporter.h>
 
 %include <OpenSim/Simulation/SimulationUtilities.h>
+%template(analyze) OpenSim::analyze<double>;
+%template(analyzeVec3) OpenSim::analyze<SimTK::Vec3>;
+%template(analyzeSpatialVec) OpenSim::analyze<SimTK::SpatialVec>;
+
 %include <OpenSim/Simulation/VisualizerUtilities.h>
+
+%include <OpenSim/Simulation/TableProcessor.h>
 
 // Iterators.
 %template(FrameList) OpenSim::ComponentList<const OpenSim::Frame>;
@@ -362,3 +379,4 @@ EXPOSE_SET_CONSTRUCTORS_HELPER(ProbeSet);
 EXPOSE_SET_CONSTRUCTORS_HELPER(MarkerSet);
 EXPOSE_SET_CONSTRUCTORS_HELPER(WrapObjectSet);
 EXPOSE_SET_CONSTRUCTORS_HELPER(CoordinateSet);
+
