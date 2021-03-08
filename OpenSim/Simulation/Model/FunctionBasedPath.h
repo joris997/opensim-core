@@ -2,7 +2,9 @@
 #define OPENSIM_FUNCTIONBASED_PATH_H_
 
 #include "GeometryPath.h"
+#include "PointBasedPath.h"
 #include "Interpolate.h"
+#include <stdlib.h>
 
 #ifdef SWIG
     #ifdef OSIMSIMULATION_API
@@ -29,13 +31,29 @@ class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
 //                           getLengtheningSpeed, SimTK::Stage::Velocity);
 
 private:
-//    Interpolate interp;
+    Interpolate interp;
+    int identity;
 
 public:
-//    FunctionBasedPath();
+    // Default constructor
+    FunctionBasedPath();
+    // Read data constructor
+    FunctionBasedPath(int id);
+    // Copy from PointBasedPath constructor
+    FunctionBasedPath(PointBasedPath& pbp, int id);
+    FunctionBasedPath(const PointBasedPath& pbp, int id);
 
     double getLength( const SimTK::State& s) const override;
+    void setLength( const SimTK::State& s, double length) const override;
     double getLengtheningSpeed( const SimTK::State& s) const override;
+    void setLengtheningSpeed( const SimTK::State& s, double speed) const override;
+
+    double computeMomentArm(const SimTK::State &s, const Coordinate &aCoord) const override;
+
+    void printContent();
+    void readContent();
+    void setIdentity( int id){identity = id;}
+    int getIdentity(){return identity;}
 };
 }
 

@@ -24,7 +24,9 @@
  * -------------------------------------------------------------------------- */
 
 #include <OpenSim/Simulation/Model/Force.h>
-#include <OpenSim/Simulation/Model/GeometryPath.h>
+//#include <OpenSim/Simulation/Model/GeometryPath.h>
+#include <OpenSim/Simulation/Model/PointBasedPath.h>
+#include <OpenSim/Simulation/Model/FunctionBasedPath.h>
 
 namespace OpenSim {
 

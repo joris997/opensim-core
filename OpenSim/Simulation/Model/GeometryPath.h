@@ -80,6 +80,7 @@ private:
         "The wrap objects that are associated with this path");
 
     // used for scaling tendon and fiber lengths
+protected:
     double _preScaleLength;
 
     // Solver used to compute moment-arms. The GeometryPath owns this object,
@@ -155,14 +156,14 @@ public:
     @see setDefaultColor() **/
     SimTK::Vec3 getColor(const SimTK::State& s) const;
 
-    virtual double getLength( const SimTK::State& s) const = 0;
-    void setLength( const SimTK::State& s, double length) const;
     double getPreScaleLength( const SimTK::State& s) const;
     void setPreScaleLength( const SimTK::State& s, double preScaleLength);
     const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const;
 
+    virtual double getLength( const SimTK::State& s) const = 0;
+    virtual void setLength( const SimTK::State& s, double length) const = 0;
     virtual double getLengtheningSpeed(const SimTK::State& s) const = 0;
-    void setLengtheningSpeed( const SimTK::State& s, double speed ) const;
+    virtual void setLengtheningSpeed( const SimTK::State& s, double speed ) const = 0;
 
     /** get the path as PointForceDirections directions, which can be used
         to apply tension to bodies the points are connected to.*/
@@ -185,7 +186,7 @@ public:
     //--------------------------------------------------------------------------
     // COMPUTATIONS
     //--------------------------------------------------------------------------
-    virtual double computeMomentArm(const SimTK::State& s, const Coordinate& aCoord) const;
+    virtual double computeMomentArm(const SimTK::State& s, const Coordinate& aCoord) const = 0;
 
     //--------------------------------------------------------------------------
     // SCALING
@@ -223,7 +224,7 @@ protected:
 
     void extendFinalizeFromProperties() override;
 
-private:
+protected:
 
     void computePath(const SimTK::State& s ) const;
     void computeLengtheningSpeed(const SimTK::State& s) const;

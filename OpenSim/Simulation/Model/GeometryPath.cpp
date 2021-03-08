@@ -446,24 +446,15 @@ void GeometryPath::updateGeometry(const SimTK::State& s) const
  *
  * @return Total length of the path.
  */
-<<<<<<< HEAD
 //double GeometryPath::getLength( const SimTK::State& s) const
 //{
 //    computePath(s);  // compute checks if path needs to be recomputed
-//    return( getCacheVariableValue<double>(s, "length") );
+//    return getCacheVariableValue(s, _lengthCV);
 //}
-=======
-double GeometryPath::getLength( const SimTK::State& s) const
-{
-    computePath(s);  // compute checks if path needs to be recomputed
-    return getCacheVariableValue(s, _lengthCV);
-}
->>>>>>> origin/master
-
-void GeometryPath::setLength( const SimTK::State& s, double length ) const
-{
-    setCacheVariableValue(s, _lengthCV, length);
-}
+//void GeometryPath::setLength( const SimTK::State& s, double length ) const
+//{
+//    setCacheVariableValue(s, _lengthCV, length);
+//}
 
 void GeometryPath::setColor(const SimTK::State& s, const SimTK::Vec3& color) const
 {
@@ -481,23 +472,15 @@ Vec3 GeometryPath::getColor(const SimTK::State& s) const
  *
  * @return lengthening speed of the path.
  */
-<<<<<<< HEAD
 //double GeometryPath::getLengtheningSpeed( const SimTK::State& s) const
 //{
 //    computeLengtheningSpeed(s);
-//    return getCacheVariableValue<double>(s, "speed");
+//    return getCacheVariableValue(s, _speedCV);
 //}
-=======
-double GeometryPath::getLengtheningSpeed( const SimTK::State& s) const
-{
-    computeLengtheningSpeed(s);
-    return getCacheVariableValue(s, _speedCV);
-}
->>>>>>> origin/master
-void GeometryPath::setLengtheningSpeed( const SimTK::State& s, double speed ) const
-{
-    setCacheVariableValue(s, _speedCV, speed);
-}
+//void GeometryPath::setLengtheningSpeed( const SimTK::State& s, double speed ) const
+//{
+//    setCacheVariableValue(s, _speedCV, speed);
+//}
 
 void GeometryPath::setPreScaleLength( const SimTK::State& s, double length ) {
     _preScaleLength = length;
@@ -1152,21 +1135,6 @@ calcLengthAfterPathComputation(const SimTK::State& s,
 
     setLength(s,length);
     return( length );
-}
-
-//_____________________________________________________________________________
-/*
- * Compute the path's moment arms for  specified coordinate.
- *
- * @param aCoord, the coordinate
- */   
-double GeometryPath::
-computeMomentArm(const SimTK::State& s, const Coordinate& aCoord) const
-{
-    if (!_maSolver)
-        const_cast<Self*>(this)->_maSolver.reset(new MomentArmSolver(*_model));
-
-    return _maSolver->solve(s, aCoord,  *this);
 }
 
 //_____________________________________________________________________________

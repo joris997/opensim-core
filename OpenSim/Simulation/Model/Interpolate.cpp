@@ -15,30 +15,13 @@ int binomialCoefficient(int n, int k) {
     return binomialCoefficient(n-1, k-1) + binomialCoefficient(n-1, k);
 }
 
-////////////////////
-// FUNCTIONS ADAM //
-////////////////////
-// defer an action until the destruction of this wrapper
-template<typename Callback>
-struct Defer final {
-    Callback cb;
-    Defer(Callback _cb) : cb{std::move(_cb)} {
-    }
-    Defer(Defer const&) = delete;
-    Defer(Defer&&) noexcept = default;
-    Defer& operator=(Defer const&) = delete;
-    Defer& operator=(Defer&&) = delete;
-    ~Defer() noexcept {
-        cb();
-    }
-};
-// factory function to Defer
 template<typename Callback>
 Defer<Callback> defer_action(Callback cb) {
     return Defer<Callback>{std::move(cb)};
 }
-static bool coord_affects_muscle(
-    OpenSim::Muscle const& m,
+
+bool coord_affects_muscle(
+    OpenSim::PointBasedPath const& pbp,
     OpenSim::Coordinate const& c,
     SimTK::State& state,
     Nonzero_conditions& out) {
@@ -57,7 +40,7 @@ static bool coord_affects_muscle(
 
     for (double v = start; v <= end; v += step) {
         c.setValue(state, v);
-        double ma = m.getGeometryPath().computeMomentArm(state, c);
+        double ma = pbp.computeMomentArm(state, c);
         if (std::abs(ma) > 0.001) {
             out.input_val = v;
             out.nonzero_ma = ma;
@@ -70,11 +53,34 @@ static bool coord_affects_muscle(
 //////////////////
 // CONSTRUCTORS //
 //////////////////
+Interpolate::Interpolate(){};
+
+Interpolate::Interpolate(std::vector<OpenSim::Coordinate const*> coordsIn,
+                         std::vector<Discretization> dSIn,
+                         std::vector<double> evalsIn)
+    : dimension(dSIn.size()),
+      evals(evalsIn),
+      n(dimension,0),
+      u(dimension,0),
+      loc(dimension,0),
+      dS(dSIn),
+      coords(coordsIn)
+    {
+        std::vector<double> dc_;
+        for (int i=0; i<dimension; i++){
+            beta.push_back({0,0,0,0});
+
+            dc_.clear();
+            linspace(dc_,dS[i].begin,dS[i].end,dS[i].nPoints);
+            discretization.push_back(dc_);
+            discSizes.push_back(dS[i].gridsize);
+        }
+    }
+
 Interpolate::Interpolate(std::vector<std::vector<double> > discretizationIn,
                          std::vector<std::pair<std::vector<int>, double> > evalsPair)
     : discretization(discretizationIn),
       dimension(discretizationIn.size()),
-      evalsPair(evalsPair),
       n(dimension,0),
       u(dimension,0),
       loc(dimension,0)
@@ -103,7 +109,7 @@ Interpolate::Interpolate(std::vector<std::vector<double> > discretizationIn,
 
         std::vector<int> cnt(dimension,0);
         for (int i=0; i<numOfLoops; i++){
-            for (int k=0; k<evalsPair.size(); k++){
+            for (unsigned k=0; k<evalsPair.size(); k++){
                 if (evalsPair[k].first == cnt){
                     evals.push_back(evalsPair[k].second);
                 }
@@ -123,7 +129,7 @@ Interpolate::Interpolate(std::vector<std::vector<double> > discretizationIn,
         }
     }
 
-Interpolate::Interpolate(OpenSim::Muscle const& m,
+Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
                          OpenSim::Coordinate const** cBegin,
                          OpenSim::Coordinate const** cEnd,
                          SimTK::State& st,
@@ -137,8 +143,6 @@ Interpolate::Interpolate(OpenSim::Muscle const& m,
         std::ptrdiff_t n = (cEnd-cBegin)+1;
         assert(n > 0);
         assert(dimension == (int)n);
-
-        OpenSim::GeometryPath const& musc_path = m.getGeometryPath();
 
         // put all coordinate pointers in a vector to later unpack an incoming
         // state to a vector of coordinate values
@@ -186,7 +190,7 @@ Interpolate::Interpolate(OpenSim::Muscle const& m,
                 const OpenSim::Coordinate& c = *cBegin[ii];
                 c.setValue(st,coordValues[ii]);
             }
-            evals.push_back((musc_path.getLength(st)));
+            evals.push_back((gp.getLength(st)));
             // update cnt values
             for (int x=dimension-1; x>=0; x--){
                 if (cnt[x] != dS[x].nPoints-1){
@@ -211,11 +215,22 @@ Interpolate::Interpolate(OpenSim::Muscle const& m,
         }
     }
 
-Interpolate::Interpolate(OpenSim::Muscle const& m,
+//Interpolate::Interpolate(OpenSim::Muscle const& m,
+//                         std::vector<OpenSim::Coordinate const*> coords,
+//                         SimTK::State& st,
+//                         std::vector<int>& discretizationNPoints)
+//            : Interpolate(m.getPointBasedPath(),
+//                          &coords[0],
+//                          &coords[coords.size()-1],
+//                          st,
+//                          discretizationNPoints)
+//            {}
+
+Interpolate::Interpolate(OpenSim::PointBasedPath const& pbp,
                          std::vector<OpenSim::Coordinate const*> coords,
                          SimTK::State& st,
                          std::vector<int>& discretizationNPoints)
-            : Interpolate(m,
+            : Interpolate(pbp,
                           &coords[0],
                           &coords[coords.size()-1],
                           st,
@@ -229,7 +244,7 @@ Interpolate::Interpolate(OpenSim::Muscle const& m,
 double Interpolate::getInterp(const SimTK::State &s){
     assert(coords.size() != 0);
     std::vector<double> x;
-    for (int i=0; i<coords.size(); i++){
+    for (unsigned i=0; i<coords.size(); i++){
         x.push_back(coords[i]->getValue(s));
     }
     return getInterp(x);
@@ -276,8 +291,6 @@ double Interpolate::getInterp(const std::vector<double> &x){
     bool breakWhile = false;
     bool allTrue;
     double Beta = 1;
-//    int cnt=0;
-//    while (cnt < pow(dimension,4)){
     while (discrLoopCnt[0] < 3){
         Beta = 1;
         for (int i=0; i<dimension; i++){
@@ -288,7 +301,7 @@ double Interpolate::getInterp(const std::vector<double> &x){
             loc[i] = discrLoopCnt[i] + n[i];
         }
 
-        z += getEvalFast()*Beta;
+        z += getEval()*Beta;
 
 
         // from the back to the front, check if we're already at the maximum iteration
@@ -331,7 +344,7 @@ double Interpolate::getInterp(const std::vector<double> &x){
 double Interpolate::getInterpStruct(const SimTK::State &s){
     assert(coords.size() != 0);
     std::vector<double> x;
-    for (int i=0; i<coords.size(); i++){
+    for (unsigned i=0; i<coords.size(); i++){
         x.push_back(coords[i]->getValue(s));
     }
     return getInterpStruct(x);
@@ -375,7 +388,7 @@ double Interpolate::getInterpStruct(const std::vector<double> &x){
             loc[i] = discrLoopCnt[i] + n[i];
         }
 
-        z += getEvalFast()*Beta;
+        z += getEval()*Beta;
 
         for (int x=dimension-1; x>=0; x--){
             if (discrLoopCnt[x] != 2){
@@ -404,7 +417,7 @@ double Interpolate::getLengtheningSpeed(const SimTK::State& s){
 double Interpolate::getInterpDer(const SimTK::State &s, int coordinate, double h){
     assert(coords.size() != 0);
     std::vector<double> x;
-    for (int i=0; i<coords.size(); i++){
+    for (unsigned i=0; i<coords.size(); i++){
         x.push_back(coords[i]->getValue(s));
     }
     return getInterpDer(x,coordinate,h);
@@ -428,7 +441,7 @@ double Interpolate::getInterpDer(const std::vector<double> &x, int coordinate, d
 
 
 
-double Interpolate::getEvalFast(){
+double Interpolate::getEval(){
     // get the wrapping length evaluation given a vector 'loc' which contains, in
     // ascending dimension, the index in each dimension
     int factor = 1;
@@ -445,286 +458,3 @@ double Interpolate::getEvalFast(){
     assert(idx <= evals.size());
     return evals[idx];
 }
-
-
-double Interpolate::getEval(){
-    // get the wrapping length evaluation given a vector 'loc' which contains, in
-    // ascending dimension, the index in each dimension
-    for (int i=0; i<evalsPair.size(); i++){
-        if (evalsPair[i].first == loc){
-            return evalsPair[i].second;
-        }
-    }
-    return 0.0;
-}
-
-
-void Interpolate::computeBasisFunctions(std::vector<double> u,
-                                   int order){
-    // create the basis spline functions
-    for (int i=0; i<dimension; i++){
-        double Bk[4];
-        for (int k=0; k<4; k++){
-            Bk[k] = binomialCoefficient(order,k)*pow(u[i],k)*pow(1-u[i],order-k);
-        }
-        std::vector<double> betaArray;
-        betaArray.push_back(Bk[0] + Bk[1]);
-        betaArray.push_back(Bk[1]/3);
-        betaArray.push_back(Bk[3] + Bk[2]);
-        betaArray.push_back(-Bk[2]/3);
-        beta.push_back(betaArray);
-    }
-}
-
-
-
-//double z, Beta;
-//int discrLoopCnt = -1;
-//for (int i=0; i<4; i++){
-//    Beta = beta[coordinate][i];
-//    for (int j=0; j<dimension; j++){
-//        loc[i] = n[j];
-//    }
-//    loc[coordinate] += discrLoopCnt;
-
-//    z += getEval()*Beta/
-//            (discretization[coordinate][1]-discretization[coordinate][0]);
-
-//    discrLoopCnt += 1;
-//}
-
-//double Interpolate::interpCubicHermiteSpline(vector<double> x, int derivativeOrder){
-//    // This is the main interpolation function
-//    // IN:  x, a vector of points within the considered interpolation range
-//    // OUT: eval, the interpolated value
-//    vector<int> n, pk, pkp1, pkm1, pkp2;
-//    vector<double> u, d;
-//    vector<vector<double>> beta, m;
-//    double Beta0=1, Beta1=1, Beta2=1, Beta3=1, z=0;
-//    int order = 3;
-
-//    // check size of input argument
-//    if (x.size() != dimension){
-//        std::cout << "Interpolation state not equal to object's dimension" << std::endl;
-//        exit(EXIT_FAILURE);
-//    }
-
-//    // get the index of the closest range value to the discretization point
-//    for (int i=0; i<dimension; i++){
-//        for (int ii=1; ii<discretization[i].size(); ii++){
-//            if (x[i] - discretization[i][ii] < 0){
-//                n.push_back(ii-1);
-//                break;
-//            }
-//        }
-//    }
-////    for (int i=0; i<n.size(); i++){
-////        std::cout << "n[" << i << "]: " << n[i] << std::endl;
-////    }
-
-//    // compute remaining fraction
-//    for (int i=0; i<dimension; i++){
-//        d.push_back((double)(discretization[i][2]-discretization[i][1]));
-//    }
-//    for (int i=0; i<dimension; i++){
-//        u.push_back((double)((x[i]-discretization[i][n[i]])/(d[i])));
-//    }
-
-//    // compute the polynomials (already evaluated)
-//    if (derivativeOrder == 0){
-//        computeBasisFunctions(beta,u,order);
-//    } else if (derivativeOrder == 1){
-//        computeBasisFunctionsDerivatives(beta,u,order);
-//    } else {
-//        std::cout << "Order of the derivative for interpolation: " << derivativeOrder <<
-//                     " not supported" << std::endl;
-//        exit(EXIT_FAILURE);
-//    }
-
-//    // obtain derivative approximation m
-//    for (int i=0; i<dimension; i++){
-//        pk = n;
-//        pkp1 = n; pkp1[i] += 1;
-//        pkm1 = n; pkm1[i] -= 1;
-//        vector<double> mArray;
-//        mArray.push_back(0.5*((getEval(pkp1) - getEval(pk))/
-//                       (discretization[i][n[i]+1] - discretization[i][n[i]]) +
-//                       (getEval(pk) - getEval(pkm1))/
-//                       (discretization[i][n[i]] - discretization[i][n[i]-1])));
-
-//        pkp2 = pkp1; pkp2[i] += 1;
-//        mArray.push_back(0.5*((getEval(pkp2) - getEval(pkp1))/
-//                       (discretization[i][n[i]+2] - discretization[i][n[i]+1]) +
-//                       (getEval(pkp1) - getEval(n))/
-//                       (discretization[i][n[i]+1] - discretization[i][n[i]])));
-
-//        m.push_back(mArray);
-//    }
-
-//    for (int i=0; i<dimension; i++){
-//        Beta0 *= beta[i][0];
-//        Beta1 *= beta[i][1];
-//        Beta2 *= beta[i][2];
-//        Beta3 *= beta[i][3];
-//    }
-////    std::cout << "Beta0: " << Beta0 << std::endl;
-////    std::cout << "Beta1: " << Beta1 << std::endl;
-////    std::cout << "Beta2: " << Beta2 << std::endl;
-////    std::cout << "Beta3: " << Beta3 << std::endl;
-
-//    for (int i=0; i<dimension; i++){
-//        pkp1 = n; pkp1[i] += 1;
-//        z += (Beta0*getEval(n) + Beta1*m[i][0] +
-//              Beta2*getEval(pkp1) + Beta3*m[i][1]);
-////        z += (beta[i][0]*getEval(n) + beta[i][1]*m[i][0] +
-////              beta[i][2]*getEval(pkp1) + beta[i][3]*m[i][1]);
-////        std::cout << "\n" << "z[" << i << "]: " <<
-////                     (Beta0*getEval(n) + Beta1*m[i][0] + Beta2*getEval(pkp1) + Beta3*m[i][1]) << std::endl;
-//    }
-//    return z;
-//}
-
-
-
-//void Interpolate::computeBasisFunctionsDerivatives(vector<vector<double>> &beta,
-//                                              vector<double> u,
-//                                              int order){
-////    // compute the derivatives of the basis spline function for evaluation of the
-////    // derivative of the grid-frield
-////    for (int i=0; i<dimension; i++){
-////        double Bk[4];
-////        for (int k=0; k<4; k++){
-////            Bk[k] = binomialCoefficient(order,k)*k*pow(u[i],k-1)*(order-k)*pow(1-u[i],order-k-1);
-////        }
-////        vector<double> betaArray;
-////        betaArray.push_back(Bk[0] + Bk[1]);
-////        betaArray.push_back(Bk[1]/3);
-////        betaArray.push_back(Bk[3] + Bk[2]);
-////        betaArray.push_back(-Bk[2]/3);
-////        beta.push_back(betaArray);
-////    }
-//    for (int i=0; i<dimension; i++){
-//        vector<double> betaArray;
-//        betaArray.push_back(6*pow(u[i],2) - 6*u[i]);
-//        betaArray.push_back(3*pow(u[i],2) - 4*u[i] + 1);
-//        betaArray.push_back(-6*pow(u[i],2) + 6*u[i]);
-//        betaArray.push_back(3*pow(u[i],2) - 2*u[i]);
-//        beta.push_back(betaArray);
-//    }
-//}
-
-
-
-//    for (int i=0; i<dimension; i++){
-//        vector<double> betaArray;
-//        betaArray.push_back(2*pow(u[i],3) - 3*pow(u[i],2) + 1);
-//        betaArray.push_back(pow(u[i],3) - 2*pow(u[i],2) + u[i]);
-//        betaArray.push_back(-2*pow(u[i],3) + 3*pow(u[i],2));
-//        betaArray.push_back(pow(u[i],3) - pow(u[i],2));
-//        beta.push_back(betaArray);
-//    }
-
-//    for (int i=0; i<dimension; i++){
-//        vector<double> betaArray;
-//        betaArray.push_back(6*pow(u[i],2) - 6*u[i]);
-//        betaArray.push_back(3*pow(u[i],2) - 4*u[i] + 1);
-//        betaArray.push_back(-6*pow(u[i],2) + 6*u[i]);
-//        betaArray.push_back(3*pow(u[i],2) - 2*u[i]);
-//        beta.push_back(betaArray);
-//    }
-
-
-
-
-
-
-
-
-//    // get the index of the closest range value to the discretization point
-//    for (int i=0; i<dimension; i++){
-//        auto it = std::find_if(std::begin(discretization[i]),
-//                               std::end(discretization[i]),
-//                               [&](double j){return j > x[i];});
-//        n[i] = std::distance(discretization[i].begin(), it)-1;
-//    }
-
-//    // compute remaining fraction
-//    for (int i=0; i<dimension; i++){
-//        u[i] = (x[i]-discretization[i][n[i]])/
-//                (discretization[i][2]-discretization[i][1]);
-//    }
-
-//    // compute the polynomials (already evaluated)
-//    for (int i=0; i<dimension; i++){
-//        // compute binomial coefficient derivatives
-//        beta[i][0] = 5*pow(u[i],4) - 10*pow(u[i],3) + 4.5*pow(u[i],2) + u[i] - 0.5;
-//        beta[i][1] = -15*pow(u[i],4) + 30*pow(u[i],3) - 13.5*pow(u[i],2) - 2*u[i];
-//        beta[i][2] = 15*pow(u[i],4) - 30*pow(u[i],3) + 13.5*pow(u[i],2) + u[i] + 0.5;
-//        beta[i][3] = pow(u[i],2)*(-5*pow(u[i],2) + 10*u[i] - 4.5);
-//    }
-
-//    // loop over all the considered points (n-dimensional) and multiply the
-//    // evaluation with the weight
-//    double z, Beta;
-//    int discrLoopCnt = -1;
-//    for (int i=0; i<4; i++){
-//        Beta = beta[coordinate][i];
-//        for (int j=0; j<dimension; j++){
-//            loc[j] = n[j];
-//        }
-//        loc[coordinate] += discrLoopCnt;
-
-//        // this division (/) works for 1D but for nD things need to change
-//        z += getEvalFast()*Beta/
-//                (discretization[coordinate][1]-discretization[coordinate][0]);
-
-//        discrLoopCnt += 1;
-//    }
-
-
-
-//    int discrLoopCnt[dimension] = {-1};
-//    double z;
-//    bool breakWhile = false;
-//    bool allTrue;
-//    double Beta = 1;
-
-//    while (discrLoopCnt[0] < 3){
-//        Beta = 1;
-//        for (int i=0; i<dimension; i++){
-//            Beta = Beta*beta[i][discrLoopCnt[i]+g];
-//        }
-
-//        for (int i=0; i<dimension; i++){
-//            loc[i] = discrLoopCnt[i] + n[i];
-//        }
-//        z += getEvalFast()*Beta;
-
-
-//        // EXIT CONDITIONS
-//        for (int x=dimension-1; x>=0; x--){
-//            if (discrLoopCnt[x] != 2){
-//                discrLoopCnt[x] += 1;
-//                break;
-//            }
-//            if (discrLoopCnt[x] == 2){
-//                for (int y=x; y<dimension; y++){
-//                    discrLoopCnt[y] = -1;
-//                }
-//            }
-//        }
-//        if (breakWhile){
-//            break;
-//        }
-//        allTrue = true;
-//        for (int i=0; i<dimension; i++){
-//            if (discrLoopCnt[i] != 2){
-//                allTrue = false;
-//                break;
-//            }
-//        }
-//        if (allTrue){
-//            breakWhile = true;
-//        }
-//    }
-//    return z;

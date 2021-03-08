@@ -59,7 +59,8 @@
 #include "Model/PathPointSet.h"
 #include "Model/ConditionalPathPoint.h"
 #include "Model/MovingPathPoint.h"
-//#include "Model/GeometryPath.h"
+
+#include "Model/GeometryPath.h"
 #include "Model/PointBasedPath.h"
 #include "Model/FunctionBasedPath.h"
 
@@ -191,9 +192,10 @@ OSIMSIMULATION_API void RegisterTypes_osimSimulation()
     Object::registerType( LineGeometry());
     Object::registerType( FrameGeometry());
     Object::registerType( Arrow());
+
 //    Object::registerType( GeometryPath());
-    Object::registerType( PointBasedPath());
-    Object::registerType( FunctionBasedPath());
+    Object::registerType( OpenSim::PointBasedPath());
+    Object::registerType( OpenSim::FunctionBasedPath());
 
     Object::registerType( ControlSet() );
     Object::registerType( ControlConstant() );

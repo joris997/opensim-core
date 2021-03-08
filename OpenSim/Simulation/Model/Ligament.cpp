@@ -25,7 +25,9 @@
 // INCLUDES
 //=============================================================================
 #include "Ligament.h"
-#include "GeometryPath.h"
+//#include "GeometryPath.h"
+#include "PointBasedPath.h"
+#include "FunctionBasedPath.h"
 #include "PointForceDirection.h"
 #include <OpenSim/Common/SimmSpline.h>
 
