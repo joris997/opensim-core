@@ -5,6 +5,7 @@
 #include "PointBasedPath.h"
 #include "Interpolate.h"
 #include <stdlib.h>
+#include <vector>
 
 #ifdef SWIG
     #ifdef OSIMSIMULATION_API
@@ -25,14 +26,11 @@ class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
 //class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
     OpenSim_DECLARE_CONCRETE_OBJECT(FunctionBasedPath, GeometryPath);
 
-//    OpenSim_DECLARE_OUTPUT(length, double,
-//                           getLength, SimTK::Stage::Position);
-//    OpenSim_DECLARE_OUTPUT(lengthening_speed, double,
-//                           getLengtheningSpeed, SimTK::Stage::Velocity);
+    OpenSim_DECLARE_PROPERTY(identity,int,"Identity related to printed file");
+//    OpenSim_DECLARE_PROPERTY(coords,std::vector<const Coordinate *>,"Coordinates related to the GeometryPath");
 
 private:
     Interpolate interp;
-    int identity;
 
 public:
     // Default constructor
@@ -40,8 +38,7 @@ public:
     // Read data constructor
     FunctionBasedPath(int id);
     // Copy from PointBasedPath constructor
-    FunctionBasedPath(PointBasedPath& pbp, int id);
-    FunctionBasedPath(const PointBasedPath& pbp, int id);
+    FunctionBasedPath(const Model& model, const PointBasedPath& pbp, int id);
 
     double getLength( const SimTK::State& s) const override;
     void setLength( const SimTK::State& s, double length) const override;
@@ -50,10 +47,11 @@ public:
 
     double computeMomentArm(const SimTK::State &s, const Coordinate &aCoord) const override;
 
-    void printContent();
+    void printContent(std::ofstream& printFile) const;
     void readContent();
-    void setIdentity( int id){identity = id;}
-    int getIdentity(){return identity;}
+    void setIdentity( int id) {upd_identity() = id;}
+    int getIdentity() const {return get_identity();}
+    Interpolate getInterpolate() const {return interp;}
 };
 }
 

@@ -6,12 +6,9 @@ using namespace SimTK;
 using SimTK::Vec3;
 
 // Constructor
-//PointBasedPath::PointBasedPath() :
-//    GeometryPath()
-//{
-//    setAuthors("Joris Verhagen");
-//    constructProperties();
-//}
+PointBasedPath::PointBasedPath() : GeometryPath(){
+
+}
 
 double PointBasedPath::getLength( const SimTK::State& s) const
 {

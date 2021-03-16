@@ -109,6 +109,8 @@ public:
     PathWrapSet& updWrapSet() { return upd_PathWrapSet(); }
     void addPathWrap(WrapObject& aWrapObject);
 
+    void setPathPointSet(const PathPointSet& pps) { upd_PathPointSet() = pps; }
+    void setPathWrapSet(const PathWrapSet& pws) { upd_PathWrapSet() = pws; }
     //--------------------------------------------------------------------------
     // UTILITY
     //--------------------------------------------------------------------------
@@ -160,6 +162,8 @@ public:
     void setPreScaleLength( const SimTK::State& s, double preScaleLength);
     const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const;
 
+    /** Get methods are made non-const as when the GeometryPath is a FunctionBased-
+    Path, the Interpolation object inside of it changes after every evaluation **/
     virtual double getLength( const SimTK::State& s) const = 0;
     virtual void setLength( const SimTK::State& s, double length) const = 0;
     virtual double getLengtheningSpeed(const SimTK::State& s) const = 0;

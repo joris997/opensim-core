@@ -62,7 +62,7 @@ void PathActuator::setNull()
  */
 void PathActuator::constructProperties()
 {
-//    constructProperty_GeometryPath(GeometryPath());
+    constructProperty_GeometryPath(PointBasedPath());
     constructProperty_optimal_force(1.0);
 }
 

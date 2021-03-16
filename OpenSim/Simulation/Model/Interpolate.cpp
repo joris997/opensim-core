@@ -168,6 +168,7 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
             dc.end = c.getRangeMax();
             dc.nPoints = discretizationNPoints[i];
             dc.gridsize = (dc.end-dc.begin) / dc.nPoints;
+            std::cout << "dc: " << dc.begin << ", " << dc.end << ", " << dc.nPoints << ", " << dc.gridsize << std::endl;
             dS.push_back(dc);
         }
         // slightly extend the bound for accurate interpolation on the edges
@@ -182,6 +183,7 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
         for (int i=0; i<dimension; i++){
             numOfLoops *= dS[i].nPoints;
         }
+        std::cout << "numOfLoops: " << numOfLoops << std::endl;
         std::vector<int> cnt(dimension);
         std::vector<double> coordValues(dimension);
         for (int i=0; i<numOfLoops; i++){
@@ -191,6 +193,10 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
                 c.setValue(st,coordValues[ii]);
             }
             evals.push_back((gp.getLength(st)));
+//            if (i%200 == 0){
+                std::cout << "evals: " << gp.getLength(st) << std::endl;
+//            }
+
             // update cnt values
             for (int x=dimension-1; x>=0; x--){
                 if (cnt[x] != dS[x].nPoints-1){
@@ -214,17 +220,6 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
             discSizes.push_back(dS[i].nPoints);
         }
     }
-
-//Interpolate::Interpolate(OpenSim::Muscle const& m,
-//                         std::vector<OpenSim::Coordinate const*> coords,
-//                         SimTK::State& st,
-//                         std::vector<int>& discretizationNPoints)
-//            : Interpolate(m.getPointBasedPath(),
-//                          &coords[0],
-//                          &coords[coords.size()-1],
-//                          st,
-//                          discretizationNPoints)
-//            {}
 
 Interpolate::Interpolate(OpenSim::PointBasedPath const& pbp,
                          std::vector<OpenSim::Coordinate const*> coords,

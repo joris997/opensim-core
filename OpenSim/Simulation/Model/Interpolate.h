@@ -105,10 +105,11 @@ class Interpolate{
 
     public:
         // getting
-        std::vector<double> getRange(int i) {return discretization[i];}
-        int getDimension() {return dimension;}
-        std::vector<Discretization> getdS() {return dS;}
-        std::vector<double> getEvals() {return evals;}
+        std::vector<double> getRange(int i) const {return discretization[i];}
+        int getDimension() const {return dimension;}
+        std::vector<Discretization> getdS() const {return dS;}
+//        std::vector<OpenSim::Coordinate *> getCoords() const {return coords;}
+        std::vector<double> getEvals() const {return evals;}
 
         // template member functions
         double getEval();

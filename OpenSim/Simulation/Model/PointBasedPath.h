@@ -19,16 +19,10 @@ class WrapResult;
 class WrapObject;
 
 class OSIMSIMULATION_API PointBasedPath : public GeometryPath {
-//class OSIMSIMULATION_API PointBasedPath : public GeometryPath {
     OpenSim_DECLARE_CONCRETE_OBJECT(PointBasedPath, GeometryPath);
 
-//    OpenSim_DECLARE_OUTPUT(length, double,
-//                           getLength, SimTK::Stage::Position);
-//    OpenSim_DECLARE_OUTPUT(lengthening_speed, double,
-//                           getLengtheningSpeed, SimTK::Stage::Velocity);
-
 public:
-//    PointBasedPath();
+    PointBasedPath();
 
     double getLength( const SimTK::State& s) const override;
     void setLength( const SimTK::State& s, double length) const override;
