@@ -6,6 +6,7 @@
 #include "Interpolate.h"
 #include <stdlib.h>
 #include <vector>
+#include <mutex>
 
 #ifdef SWIG
     #ifdef OSIMSIMULATION_API
@@ -30,7 +31,8 @@ class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
 //    OpenSim_DECLARE_PROPERTY(coords,std::vector<const Coordinate *>,"Coordinates related to the GeometryPath");
 
 private:
-    Interpolate interp;
+    mutable Interpolate interp;
+//    mutable std::mutex mtx;
 
 public:
     // Default constructor

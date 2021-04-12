@@ -10,6 +10,13 @@ using SimTK::Vec3;
 //////////////////
 // CONSTRUCTORS //
 //////////////////
+
+//FunctionBasedPath::FunctionBasedPath(FunctionBasedPath &fbp){
+//    std::lock_guard<std::mutex>> fbp.mtx;
+//    interp = fbp.interp;
+//    mtx = fbp.mtx;
+//}
+
 FunctionBasedPath::FunctionBasedPath(){
     constructProperty_identity(0);
 //    constructProperty_coords(nullptr);
@@ -78,13 +85,12 @@ FunctionBasedPath::FunctionBasedPath(const Model& model,
 /////////////////////
 double FunctionBasedPath::getLength(const State& s) const
 {
-//    Interpolate interpCopy = interp;
+//    std::lock_guard<std::mutex> guard(mtx);
     return interp.getLength(s);
-
-//    computePath(s);
 
 //    std::cout << "interp: " << interpCopy.getLength(s);
 //    std::cout << "\tnormal: " << getCacheVariableValue(s, _lengthCV) << "\n";
+//    computePath(s);
 //    return getCacheVariableValue(s, _lengthCV);
 }
 
@@ -95,10 +101,10 @@ void FunctionBasedPath::setLength(const State &s, double length) const
 
 double FunctionBasedPath::getLengtheningSpeed(const State &s) const
 {
-//    Interpolate interpCopy = interp;
-//    return interpCopy.getLengtheningSpeed(s);
-    computeLengtheningSpeed(s);
-    return getCacheVariableValue(s, _speedCV);
+    return interp.getLengtheningSpeed(s);
+
+//    computeLengtheningSpeed(s);
+//    return getCacheVariableValue(s, _speedCV);
 }
 
 void FunctionBasedPath::setLengtheningSpeed(const State &s, double speed) const
@@ -108,10 +114,10 @@ void FunctionBasedPath::setLengtheningSpeed(const State &s, double speed) const
 
 double FunctionBasedPath::computeMomentArm(const State& s, const Coordinate& aCoord) const
 {
-    if (!_maSolver)
-        const_cast<Self*>(this)->_maSolver.reset(new MomentArmSolver(*_model));
-
-    return _maSolver->solve(s, aCoord,  *this);
+    return interp.getInterpDer(s,aCoord);
+//    if (!_maSolver)
+//        const_cast<Self*>(this)->_maSolver.reset(new MomentArmSolver(*_model));
+//    return _maSolver->solve(s, aCoord,  *this);
 }
 
 
