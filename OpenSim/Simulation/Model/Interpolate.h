@@ -14,7 +14,7 @@
 #include <OpenSim/Simulation/SimbodyEngine/Coordinate.h>
 
 ////////////////////
-// FUNCTIONS ADAM //
+// Helper structs //
 ////////////////////
 struct Discretization{
     double begin;
@@ -41,7 +41,8 @@ struct Defer final {
         cb();
     }
 };
-// factory function to Defer
+
+// Define helper functions (see .cpp file)
 template<typename Callback>
 Defer<Callback> defer_action(Callback cb);
 
@@ -51,12 +52,11 @@ bool coord_affects_muscle(
     SimTK::State& state,
     Nonzero_conditions& out);
 
-//////////////////////////
-// ADDITIONAL FUNCTIONS //
-//////////////////////////
+//////////////////////
+// Helper functions //
+//////////////////////
 template<typename T>
 void linspace(std::vector<double> &linspaced, T start_in, T end_in, int num_in){
-// from: https://stackoverflow.com/questions/27028226/python-linspace-in-c
   double start = static_cast<double>(start_in);
   double end = static_cast<double>(end_in);
   double num = static_cast<double>(num_in);
@@ -78,11 +78,8 @@ void linspace(std::vector<double> &linspaced, T start_in, T end_in, int num_in){
 
 class Interpolate{
     private:
-        // dimension of the interpolation (e.g. two states -> 2D)
+        // dimension of the interpolation (e.g. two states -> 2D -> 2)
         int dimension;
-        // number of points considered in constructing the polynomial
-        int nInterPoints = 4;
-        int g = 1;
         // vector containing the orthogonal discretization vectors
         // e.g. disc[0] = xrange, disc[1] = yrange etc.
         std::vector<std::vector<double>> discretization;
@@ -91,7 +88,8 @@ class Interpolate{
         std::vector<double> evals;
         // vector containing index closest to discretization point
         std::vector<int> n;
-        // vector containing fraction of closest index to discretization point to next
+        // vector containing fraction of closest index to discretization
+        // point to next
         std::vector<double> u;
         // array of polynomial evaluation
         std::vector<std::vector<double>> beta;
@@ -102,61 +100,56 @@ class Interpolate{
         std::vector<Discretization> dS;
         std::vector<const OpenSim::Coordinate *> coords;
 
-
     public:
         // getting
         std::vector<double> getRange(int i) const {return discretization[i];}
         int getDimension() const {return dimension;}
         std::vector<Discretization> getdS() const {return dS;}
-//        std::vector<OpenSim::Coordinate *> getCoords() const {return coords;}
         std::vector<double> getEvals() const {return evals;}
 
         // template member functions
         double getEval();
 
+        // 0th derivative
         double getInterp(const std::vector<double>& x);
         double getInterp(const SimTK::State& s);
-
-        double getInterpStruct(const std::vector<double>& x);
-        double getInterpStruct(const SimTK::State& s);
         double getLength(const SimTK::State& s);
 
-        double getInterpDer(const std::vector<double>& x, int coordinate, double h=0.0001);
-        double getInterpDer(const SimTK::State& s, int coordinate);
-        double getInterpDer(const SimTK::State& s, const OpenSim::Coordinate& coordinate);
+        // 1st derivative
+        double getInterpDer(const std::vector<double>& x,
+                            int coordinate, double h=0.0001);
+        double getInterpDer(const SimTK::State& s,
+                            int coordinate);
+        double getInterpDer(const SimTK::State& s,
+                            const OpenSim::Coordinate& coordinate);
         double getLengtheningSpeed(const SimTK::State& s);
 
-        // EMPTY CONSTRUCTOR
+        // Default constructor
         explicit Interpolate();
 
-        // READ DATA CONSTRUCTOR
+        // Precomputed data constructor
         explicit Interpolate(std::vector<OpenSim::Coordinate const*> coordsIn,
                              std::vector<Discretization> dSIn,
                              std::vector<double> evalsIn);
 
-        // CONSTRUCTOR FOR A NON-GEOMETRYPATH/COORDINATE INTERPOLATION
+        // Constructor for non FBP/PBP related interpolation
         explicit Interpolate(std::vector<std::vector<double>> discretizationIn,
-                             std::vector<std::pair<std::vector<int>,double>> evalsPair);
+                     std::vector<std::pair<std::vector<int>,double>> evalsPair);
 
-        // N COORDINATES    WITH GIVEN NPOINTS
+        // General interface constructor
+        // allows one to create an interface constructor as shown below
+        // with a vector of coordinates
         explicit Interpolate(OpenSim::PointBasedPath const& pbp,
                              OpenSim::Coordinate const** cBegin,
                              OpenSim::Coordinate const** cEnd,
                              SimTK::State& st,
                              std::vector<int>& discretizationNPoints);
 
-
-        // VECTOR OF COORDINATES
-//        explicit Interpolate(OpenSim::Muscle const& m,
-//                             std::vector<OpenSim::Coordinate const*> coords,
-//                             SimTK::State& st,
-//                             std::vector<int>& discretizationNPoints);
-
+        // Basic constructor having a vector of coordinate pointers as input
         explicit Interpolate(OpenSim::PointBasedPath const& pbp,
                              std::vector<OpenSim::Coordinate const*> coords,
                              SimTK::State& st,
                              std::vector<int>& discretizationNPoints);
-
 };
 
 #endif // INTERPOLATE_H

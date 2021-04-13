@@ -27,9 +27,11 @@ public:
     double getLength( const SimTK::State& s) const override;
     void setLength( const SimTK::State& s, double length) const override;
     double getLengtheningSpeed( const SimTK::State& s) const override;
-    void setLengtheningSpeed( const SimTK::State& s, double speed) const override;
+    void setLengtheningSpeed( const SimTK::State& s,
+                              double speed) const override;
 
-    double computeMomentArm(const SimTK::State &s, const Coordinate &aCoord) const override;
+    double computeMomentArm(const SimTK::State &s,
+                            const Coordinate &aCoord) const override;
 };
 }
 

@@ -7,39 +7,28 @@ using namespace OpenSim;
 using namespace SimTK;
 using SimTK::Vec3;
 
-//////////////////
-// CONSTRUCTORS //
-//////////////////
-
-//FunctionBasedPath::FunctionBasedPath(FunctionBasedPath &fbp){
-//    std::lock_guard<std::mutex>> fbp.mtx;
-//    interp = fbp.interp;
-//    mtx = fbp.mtx;
-//}
-
+// Default constructor
 FunctionBasedPath::FunctionBasedPath(){
     constructProperty_identity(0);
-//    constructProperty_coords(nullptr);
-    
     readContent();
 }
 
-FunctionBasedPath::FunctionBasedPath(int id){
-    // Constructor for reading in information from file and creating
-    // an interpolation object based on that file
+// Constructor for reading in information from file and creating
+// an interpolation object based on that file
+FunctionBasedPath::FunctionBasedPath(int id)
+{
     constructProperty_identity(0);
-//    constructProperty_coords(nullptr);
 
     upd_identity() = id;
     readContent();
 }
 
-
+// Constructor used for conversion from PBP to FBP
 FunctionBasedPath::FunctionBasedPath(const Model& model,
                                      const PointBasedPath& pbp,
-                                     int id){
+                                     int id)
+{
     constructProperty_identity(0);
-//    constructProperty_coords(nullptr);
 
     upd_identity() = id;
     upd_Appearance() = pbp.get_Appearance();
@@ -75,23 +64,12 @@ FunctionBasedPath::FunctionBasedPath(const Model& model,
     vector<int> nPoints(affectingCoords.size(),5);
     // create interpolation object
     interp = Interpolate(pbp,move(affectingCoords),stClone,nPoints);
-
-//    upd_coords() = affectingCoords;
 }
 
 
-/////////////////////
-// REGULAR METHODS //
-/////////////////////
 double FunctionBasedPath::getLength(const State& s) const
 {
-//    std::lock_guard<std::mutex> guard(mtx);
     return interp.getLength(s);
-
-//    std::cout << "interp: " << interpCopy.getLength(s);
-//    std::cout << "\tnormal: " << getCacheVariableValue(s, _lengthCV) << "\n";
-//    computePath(s);
-//    return getCacheVariableValue(s, _lengthCV);
 }
 
 void FunctionBasedPath::setLength(const State &s, double length) const
@@ -102,9 +80,6 @@ void FunctionBasedPath::setLength(const State &s, double length) const
 double FunctionBasedPath::getLengtheningSpeed(const State &s) const
 {
     return interp.getLengtheningSpeed(s);
-
-//    computeLengtheningSpeed(s);
-//    return getCacheVariableValue(s, _speedCV);
 }
 
 void FunctionBasedPath::setLengtheningSpeed(const State &s, double speed) const
@@ -112,12 +87,10 @@ void FunctionBasedPath::setLengtheningSpeed(const State &s, double speed) const
     setCacheVariableValue(s, _speedCV, speed);
 }
 
-double FunctionBasedPath::computeMomentArm(const State& s, const Coordinate& aCoord) const
+double FunctionBasedPath::computeMomentArm(const State& s,
+                                           const Coordinate& aCoord) const
 {
     return interp.getInterpDer(s,aCoord);
-//    if (!_maSolver)
-//        const_cast<Self*>(this)->_maSolver.reset(new MomentArmSolver(*_model));
-//    return _maSolver->solve(s, aCoord,  *this);
 }
 
 
@@ -134,12 +107,6 @@ void FunctionBasedPath::printContent(std::ofstream& printFile) const{
     }
     printFile << "\n";
 
-//    auto coords = interp.getCoords();
-//    for (unsigned i=0; i<coords.size(); i++){
-//        printFile << coords[i]->getName() << "\n";
-//    }
-//    printFile << "\n";
-
     vector<double> evals = interp.getEvals();
     for (unsigned i=0; i<evals.size(); i++){
         printFile << evals[i] << "\n";
@@ -149,7 +116,6 @@ void FunctionBasedPath::printContent(std::ofstream& printFile) const{
 }
 
 void FunctionBasedPath::readContent() {
-//    vector<string> coordsNames;
     vector<const Coordinate *> coords;
     vector<Discretization> dS;
     vector<double> evals;
@@ -202,13 +168,7 @@ void FunctionBasedPath::readContent() {
             dS.push_back(disc);
         }
         assert(dS.size() == dimension);
-//        // get affected coordinates
-//        while(std::getline(readFile,sLine)){
-//            if (sLine ==""){
-//                break;
-//            }
-//            coordsNames.push_back(atof(sLine.c_str()));
-//        }
+
         // get interpolation data
         while(std::getline(readFile,sLine)){
             if (sLine == ""){

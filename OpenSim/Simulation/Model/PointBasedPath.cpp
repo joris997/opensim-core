@@ -5,7 +5,7 @@ using namespace OpenSim;
 using namespace SimTK;
 using SimTK::Vec3;
 
-// Constructor
+// Default onstructor
 PointBasedPath::PointBasedPath() : GeometryPath(){
 
 }
@@ -39,7 +39,8 @@ void PointBasedPath::setLengtheningSpeed(const State &s, double speed) const
  *
  * @param aCoord, the coordinate
  */
-double PointBasedPath::computeMomentArm(const State& s, const Coordinate& aCoord) const
+double PointBasedPath::computeMomentArm(const State& s,
+                                        const Coordinate& aCoord) const
 {
     if (!_maSolver)
         const_cast<Self*>(this)->_maSolver.reset(new MomentArmSolver(*_model));

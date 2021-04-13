@@ -1,20 +1,10 @@
 #include "Interpolate.h"
 
-template<typename T>
-void printVector(std::vector<T> x){
-    for (unsigned i=0; i<x.size(); i++){
-        std::cout << "x[" << i << "]: " << x[i] << std::endl;
-    }
-}
+//#define DEBUG
 
-
-int binomialCoefficient(int n, int k) {
-    if (k == 0 || k == n){
-        return 1;
-    }
-    return binomialCoefficient(n-1, k-1) + binomialCoefficient(n-1, k);
-}
-
+//////////////////////
+// Helper functions //
+//////////////////////
 template<typename Callback>
 Defer<Callback> defer_action(Callback cb) {
     return Defer<Callback>{std::move(cb)};
@@ -51,10 +41,12 @@ bool coord_affects_muscle(
 }
 
 //////////////////
-// CONSTRUCTORS //
+// Constructors //
 //////////////////
+// Default constructor
 Interpolate::Interpolate(){};
 
+// General vector based interpolation constructor
 Interpolate::Interpolate(std::vector<OpenSim::Coordinate const*> coordsIn,
                          std::vector<Discretization> dSIn,
                          std::vector<double> evalsIn)
@@ -77,8 +69,8 @@ Interpolate::Interpolate(std::vector<OpenSim::Coordinate const*> coordsIn,
         }
     }
 
-Interpolate::Interpolate(std::vector<std::vector<double> > discretizationIn,
-                         std::vector<std::pair<std::vector<int>, double> > evalsPair)
+Interpolate::Interpolate(std::vector<std::vector<double>> discretizationIn,
+                     std::vector<std::pair<std::vector<int>, double>> evalsPair)
     : discretization(discretizationIn),
       dimension(discretizationIn.size()),
       n(dimension,0),
@@ -86,7 +78,6 @@ Interpolate::Interpolate(std::vector<std::vector<double> > discretizationIn,
       loc(dimension,0)
     {
         assert(discretization.size() == evalsPair[0].first.size());
-
         // allow it to work with the new struct method
         for (int i=0; i<dimension; i++){
             Discretization dc;
@@ -155,19 +146,17 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
             const OpenSim::Coordinate& c = *cBegin[i];
             bool c_was_locked = c.getLocked(st);
             c.setLocked(st, false);
-            auto unlock_c = defer_action([&] { c.setLocked(st, c_was_locked); });
+            auto unlock_c = defer_action(
+                        [&] { c.setLocked(st, c_was_locked); });
             double c_initial_value = c.getValue(st);
-            auto reset_c_val = defer_action([&] { c.setValue(st, c_initial_value); });
+            auto reset_c_val = defer_action(
+                        [&] { c.setValue(st, c_initial_value); });
         }
 
         // make discretization objects for interpolation class instance
         Discretization dc;
         for (int i=0; i<dimension; i++){
             const OpenSim::Coordinate& c = *cBegin[i];
-//            dc.begin = -0.5;
-//            dc.end = 0.5;
-//            dc.begin = c.getRangeMin();
-//            dc.end = c.getRangeMax();
             dc.begin = std::max(c.getRangeMin(),-(double)SimTK_PI);
             dc.end = std::min(c.getRangeMax(),(double)SimTK_PI);
             dc.nPoints = discretizationNPoints[i];
@@ -179,18 +168,20 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
             dS[dim].begin   -= 1*dS[dim].gridsize;
             dS[dim].end     += 2*dS[dim].gridsize;
             dS[dim].nPoints += 3;
+#ifdef DEBUG
             std::cout << "dc: " << dS[dim].begin << ", "
                       << dS[dim].end << ", "
                       << dS[dim].nPoints << ", "
                       << dS[dim].gridsize << std::endl;
+#endif
         }
 
-
+        // compute the total number of evaluations we need to do
         int numOfLoops = 1;
         for (int i=0; i<dimension; i++){
             numOfLoops *= dS[i].nPoints;
         }
-        std::cout << "numOfLoops: " << numOfLoops << std::endl;
+
         std::vector<int> cnt(dimension);
         std::vector<double> coordValues(dimension);
         for (int i=0; i<numOfLoops; i++){
@@ -200,11 +191,6 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
                 c.setValue(st,coordValues[ii]);
             }
             evals.push_back((gp.getLength(st)));
-//            if (i%200 == 0){
-//                std::cout << "\n" << std::endl;
-//                printVector(coordValues);
-//                std::cout << "evals: " << gp.getLength(st) << std::endl;
-//            }
 
             // update cnt values
             for (int x=dimension-1; x>=0; x--){
@@ -241,21 +227,20 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& pbp,
                           discretizationNPoints)
             {}
 
-/////////////////
-// INTERPOLATE //
-/////////////////
-
+/////////////
+// Methods //
+/////////////
+// getLength based on the state
 double Interpolate::getLength(const SimTK::State& s){
     return getInterp(s);
 }
-
+// getLength with mapping from State to vector x
 double Interpolate::getInterp(const SimTK::State &s){
     assert(coords.size() != 0);
     std::vector<double> x;
     for (unsigned i=0; i<coords.size(); i++){
         x.push_back(coords[i]->getValue(s));
     }
-//    printVector(x);
     return getInterp(x);
 }
 double Interpolate::getInterp(const std::vector<double> &x){
@@ -282,14 +267,11 @@ double Interpolate::getInterp(const std::vector<double> &x){
     for (int i=0; i<dimension; i++){
         // compute binomial coefficient
         beta[i][0] = 0.5*(u[i]-1)*(u[i]-1)*(u[i]-1)*u[i]*(2*u[i]+1);
-        beta[i][1] = -0.5*(u[i] - 1)*(6*u[i]*u[i]*u[i]*u[i] - 9*u[i]*u[i]*u[i] + 2*u[i] + 2);
-        beta[i][2] = 0.5*u[i]*(6*u[i]*u[i]*u[i]*u[i] - 15*u[i]*u[i]*u[i] + 9*u[i]*u[i] + u[i] + 1);
+        beta[i][1] = -0.5*(u[i] - 1)*(6*u[i]*u[i]*u[i]*u[i] -
+                                      9*u[i]*u[i]*u[i] + 2*u[i] + 2);
+        beta[i][2] = 0.5*u[i]*(6*u[i]*u[i]*u[i]*u[i] - 15*u[i]*u[i]*u[i] +
+                               9*u[i]*u[i] + u[i] + 1);
         beta[i][3] = -0.5*(u[i] - 1)*u[i]*u[i]*u[i]*(2*u[i] - 3);
-
-//        beta[i][0] = (0.5*pow(u[i] - 1,3)*u[i]*(2*u[i] + 1));
-//        beta[i][1] = (-0.5*(u[i] - 1)*(6*pow(u[i],4) - 9*pow(u[i],3) + 2*u[i] + 2));
-//        beta[i][2] = (0.5*u[i]*(6*pow(u[i],4) - 15*pow(u[i],3) + 9*pow(u[i],2) + u[i] + 1));
-//        beta[i][3] = (-0.5*(u[i] - 1)*pow(u[i],3)*(2*u[i] - 3));
     }
 
     // loop over all the considered points (n-dimensional) and multiply the
@@ -308,7 +290,7 @@ double Interpolate::getInterp(const std::vector<double> &x){
     while (discrLoopCnt[0] < 3){
         Beta = 1;
         for (int i=0; i<dimension; i++){
-            Beta = Beta*beta[i][discrLoopCnt[i]+g];
+            Beta = Beta*beta[i][discrLoopCnt[i]+1];
         }
 
         for (int i=0; i<dimension; i++){
@@ -317,11 +299,10 @@ double Interpolate::getInterp(const std::vector<double> &x){
 
         z += getEval()*Beta;
 
-
-        // from the back to the front, check if we're already at the maximum iteration
-        // on that 'nested' for loop or else increment with 1. In short, everything
-        // starts with [-1,-1,-1,...] and we keep adding ones until the array of the
-        // loops becomes [ 2, 2, 2, ...]
+        // from the back to the front, check if we're already at the maximum
+        // iteration on that 'nested' for loop or else increment with 1.
+        // In short, everything starts with [-1,-1,-1,...] and we keep adding
+        // ones until the array of the loops becomes [ 2, 2, 2, ...]
         for (int x=dimension-1; x>=0; x--){
             if (discrLoopCnt[x] != 2){
                 discrLoopCnt[x] += 1;
@@ -334,7 +315,7 @@ double Interpolate::getInterp(const std::vector<double> &x){
             }
         }
 
-        // CHECKING EXIT CONDITIONS
+        // checking exit conditions
         if (breakWhile){
             break;
         }
@@ -346,82 +327,17 @@ double Interpolate::getInterp(const std::vector<double> &x){
                 break;
             }
         }
-        // if all are true (all are 2) set breakWhile to break on the next iteration
+        // if all true (all are 2) set breakWhile to break on the next iteration
         if (allTrue){
             breakWhile = true;
         }
     }
-//    std::cout << "z: " << z << std::endl;
     return z;
 }
 
-
-double Interpolate::getInterpStruct(const SimTK::State &s){
-    assert(coords.size() != 0);
-    std::vector<double> x;
-    for (unsigned i=0; i<coords.size(); i++){
-        x.push_back(coords[i]->getValue(s));
-    }
-    return getInterpStruct(x);
-}
-double Interpolate::getInterpStruct(const std::vector<double> &x){
-    assert(x.size() == dimension);
-
-    // get the index of the closest range value to the discretization point
-    for (int i=0; i<dimension; i++){
-        n[i] = floor((x[i]-dS[i].begin)/dS[i].gridsize);
-    }
-
-    // compute remaining fraction
-    for (int i=0; i<dimension; i++){
-        u[i] = (x[i]-(dS[i].begin + n[i]*dS[i].gridsize))/(dS[i].gridsize);
-    }
-
-    // compute the polynomials (already evaluated)
-    for (int i=0; i<dimension; i++){
-        // compute binomial coefficient
-        beta[i][0] = (0.5*pow(u[i] - 1,3)*u[i]*(2*u[i] + 1));
-        beta[i][1] = (-0.5*(u[i] - 1)*(6*pow(u[i],4) - 9*pow(u[i],3) + 2*u[i] + 2));
-        beta[i][2] = (0.5*u[i]*(6*pow(u[i],4) - 15*pow(u[i],3) + 9*pow(u[i],2) + u[i] + 1));
-        beta[i][3] = (-0.5*(u[i] - 1)*pow(u[i],3)*(2*u[i] - 3));
-    }
-
-    int discrLoopCnt[dimension];
-    for (int i=0; i<dimension; i++){
-        discrLoopCnt[i] = -1;
-    }
-
-    double z = 0;
-    double Beta = 1;
-    for (int cnt=0; cnt<pow(4,dimension); cnt++){
-        Beta = 1;
-        for (int i=0; i<dimension; i++){
-            Beta *= beta[i][discrLoopCnt[i]+g];
-        }
-
-        for (int i=0; i<dimension; i++){
-            loc[i] = discrLoopCnt[i] + n[i];
-        }
-
-        z += getEval()*Beta;
-
-        for (int x=dimension-1; x>=0; x--){
-            if (discrLoopCnt[x] != 2){
-                discrLoopCnt[x] += 1;
-                break;
-            }
-            if (discrLoopCnt[x] == 2){
-                for (int y=x; y<dimension; y++){
-                    discrLoopCnt[y] = -1;
-                }
-            }
-        }
-    }
-    return z;
-}
-
-
-double Interpolate::getInterpDer(const SimTK::State &s, const OpenSim::Coordinate &aCoord){
+// Derivative methods
+double Interpolate::getInterpDer(const SimTK::State &s,
+                                 const OpenSim::Coordinate &aCoord){
     for (unsigned i=0; i<coords.size(); i++){
         if (coords[i]->getName() == aCoord.getName()){
             return getInterpDer(s,i);
@@ -445,30 +361,27 @@ double Interpolate::getInterpDer(const SimTK::State &s, int coordinate){
     }
     return getInterpDer(x,coordinate);
 }
-double Interpolate::getInterpDer(const std::vector<double> &x, int coordinate, double h){
+double Interpolate::getInterpDer(const std::vector<double> &x,
+                                 int coordinate, double h){
     assert(x.size() == dimension);
     assert(coordinate <= dimension-1);
     assert(h>0 && h < (dS[coordinate].end-x[coordinate]));
-    // This is the main interpolation function
+    // This is the main interpolation function for derivatives
     // IN:  x, a vector of points within the considered interpolation range
-    //      coordinate, the generalized coordinate of which we take the derivative
+    //      coordinate, the generalized coordinate of which we take derivative
     // OUT: eval, the interpolated value
     double f1 = getInterp(x);
-//    double f1 = getInterpStruct(x);
 
     std::vector<double> x2 = x;
     x2[coordinate] += h;
     double f2 = getInterp(x2);
-//    double f2 = getInterpStruct(x2);
 
     return (f2 - f1)/h;
 }
 
-
-
 double Interpolate::getEval(){
-    // get the wrapping length evaluation given a vector 'loc' which contains, in
-    // ascending dimension, the index in each dimension
+    // get the wrapping length evaluation given a vector 'loc' which contains,
+    // in ascending dimension, the index in each dimension
     int factor = 1;
     int idx = 0;
 

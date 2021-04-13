@@ -434,28 +434,6 @@ void GeometryPath::updateGeometry(const SimTK::State& s) const
     computePath(s);
 }
 
-//=============================================================================
-// GET
-//=============================================================================
-//-----------------------------------------------------------------------------
-// LENGTH
-//-----------------------------------------------------------------------------
-//_____________________________________________________________________________
-/*
- * Compute the total length of the path.
- *
- * @return Total length of the path.
- */
-//double GeometryPath::getLength( const SimTK::State& s) const
-//{
-//    computePath(s);  // compute checks if path needs to be recomputed
-//    return getCacheVariableValue(s, _lengthCV);
-//}
-//void GeometryPath::setLength( const SimTK::State& s, double length ) const
-//{
-//    setCacheVariableValue(s, _lengthCV, length);
-//}
-
 void GeometryPath::setColor(const SimTK::State& s, const SimTK::Vec3& color) const
 {
     setCacheVariableValue(s, _colorCV, color);
@@ -465,22 +443,6 @@ Vec3 GeometryPath::getColor(const SimTK::State& s) const
 {
     return getCacheVariableValue(s, _colorCV);
 }
-
-//_____________________________________________________________________________
-/*
- * Compute the lengthening speed of the path.
- *
- * @return lengthening speed of the path.
- */
-//double GeometryPath::getLengtheningSpeed( const SimTK::State& s) const
-//{
-//    computeLengtheningSpeed(s);
-//    return getCacheVariableValue(s, _speedCV);
-//}
-//void GeometryPath::setLengtheningSpeed( const SimTK::State& s, double speed ) const
-//{
-//    setCacheVariableValue(s, _speedCV, speed);
-//}
 
 void GeometryPath::setPreScaleLength( const SimTK::State& s, double length ) {
     _preScaleLength = length;

@@ -24,15 +24,12 @@ class WrapResult;
 class WrapObject;
 
 class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
-//class OSIMSIMULATION_API FunctionBasedPath : public GeometryPath {
     OpenSim_DECLARE_CONCRETE_OBJECT(FunctionBasedPath, GeometryPath);
 
     OpenSim_DECLARE_PROPERTY(identity,int,"Identity related to printed file");
-//    OpenSim_DECLARE_PROPERTY(coords,std::vector<const Coordinate *>,"Coordinates related to the GeometryPath");
 
 private:
     mutable Interpolate interp;
-//    mutable std::mutex mtx;
 
 public:
     // Default constructor
@@ -45,9 +42,11 @@ public:
     double getLength( const SimTK::State& s) const override;
     void setLength( const SimTK::State& s, double length) const override;
     double getLengtheningSpeed( const SimTK::State& s) const override;
-    void setLengtheningSpeed( const SimTK::State& s, double speed) const override;
+    void setLengtheningSpeed( const SimTK::State& s,
+                              double speed) const override;
 
-    double computeMomentArm(const SimTK::State &s, const Coordinate &aCoord) const override;
+    double computeMomentArm(const SimTK::State &s,
+                            const Coordinate &aCoord) const override;
 
     void printContent(std::ofstream& printFile) const;
     void readContent();
@@ -58,5 +57,3 @@ public:
 }
 
 #endif
-// might need to make setLength etc. also virtual
-// or make everything virtual (just for concept)
