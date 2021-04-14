@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstddef>
 #include <regex>
+#include <sys/stat.h>
 #include <OpenSim/OpenSim.h>
 
 using namespace OpenSim;
@@ -38,7 +39,7 @@ int main(int argc, char **argv){
         return 0;
     } else {
         char const* arg = argv[0];
-        if (!strcmp(argument,"--help")){
+        if (!strcmp(arg,"--help")){
             std::cout << HELP;
             return 0;
         } else {
