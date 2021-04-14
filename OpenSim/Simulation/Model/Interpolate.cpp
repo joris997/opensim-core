@@ -44,7 +44,7 @@ bool coord_affects_muscle(
 // Constructors //
 //////////////////
 // Default constructor
-Interpolate::Interpolate(){};
+Interpolate::Interpolate(){}
 
 // General vector based interpolation constructor
 Interpolate::Interpolate(std::vector<OpenSim::Coordinate const*> coordsIn,
@@ -71,8 +71,8 @@ Interpolate::Interpolate(std::vector<OpenSim::Coordinate const*> coordsIn,
 
 Interpolate::Interpolate(std::vector<std::vector<double>> discretizationIn,
                      std::vector<std::pair<std::vector<int>, double>> evalsPair)
-    : discretization(discretizationIn),
-      dimension(discretizationIn.size()),
+    : dimension(discretizationIn.size()),
+      discretization(discretizationIn),
       n(dimension,0),
       u(dimension,0),
       loc(dimension,0)
@@ -124,8 +124,8 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
                          OpenSim::Coordinate const** cBegin,
                          OpenSim::Coordinate const** cEnd,
                          SimTK::State& st,
-                         std::vector<int>& discretizationNPoints)
-        : dimension(discretizationNPoints.size()),
+                         std::vector<int>& nPoints)
+        : dimension(nPoints.size()),
           n(dimension,0),
           u(dimension,0),
           loc(dimension,0)
@@ -159,7 +159,7 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
             const OpenSim::Coordinate& c = *cBegin[i];
             dc.begin = std::max(c.getRangeMin(),-(double)SimTK_PI);
             dc.end = std::min(c.getRangeMax(),(double)SimTK_PI);
-            dc.nPoints = discretizationNPoints[i];
+            dc.nPoints = nPoints[i];
             dc.gridsize = (dc.end-dc.begin) / (dc.nPoints-1);
             dS.push_back(dc);
         }
@@ -219,12 +219,12 @@ Interpolate::Interpolate(OpenSim::PointBasedPath const& gp,
 Interpolate::Interpolate(OpenSim::PointBasedPath const& pbp,
                          std::vector<OpenSim::Coordinate const*> coords,
                          SimTK::State& st,
-                         std::vector<int>& discretizationNPoints)
+                         std::vector<int>& nPoints)
             : Interpolate(pbp,
                           &coords[0],
                           &coords[coords.size()-1],
                           st,
-                          discretizationNPoints)
+                          nPoints)
             {}
 
 /////////////

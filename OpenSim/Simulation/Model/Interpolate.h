@@ -143,13 +143,13 @@ class Interpolate{
                              OpenSim::Coordinate const** cBegin,
                              OpenSim::Coordinate const** cEnd,
                              SimTK::State& st,
-                             std::vector<int>& discretizationNPoints);
+                             std::vector<int>& nPoints);
 
         // Basic constructor having a vector of coordinate pointers as input
         explicit Interpolate(OpenSim::PointBasedPath const& pbp,
                              std::vector<OpenSim::Coordinate const*> coords,
                              SimTK::State& st,
-                             std::vector<int>& discretizationNPoints);
+                             std::vector<int>& nPoints);
 };
 
 #endif // INTERPOLATE_H
