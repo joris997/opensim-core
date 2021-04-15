@@ -56,7 +56,6 @@
 #include "Model/GeometryPath.h"
 #include "Model/PointBasedPath.h"
 #include "Model/FunctionBasedPath.h"
-#include "Model/Interpolate.h"
 
 #include "Model/PrescribedForce.h"
 #include "Model/PointToPointSpring.h"

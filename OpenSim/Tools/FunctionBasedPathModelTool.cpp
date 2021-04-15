@@ -1,123 +1,220 @@
+#include <OpenSim/OpenSim.h>
+
 #include <vector>
-#include <string.h>
 #include <iostream>
 #include <fstream>
+#include <cstring>
 #include <cstdio>
 #include <cstddef>
-#include <regex>
-#include <sys/stat.h>
-#include <OpenSim/OpenSim.h>
+#include <sstream>
 
 using namespace OpenSim;
 
-static const char HELP[] =
-        "This tool converts a model with classic GeometryPaths or \
-        PointBasedPaths (the path of the PathActuator is described \
-        by discrete sets of points) to a model with FunctionBasedPaths \
-        \
-        To that end, when a model is provided, this tool creates a new \
-        .osim file according to the convention -originalName-FBP.osim \
-        and a .txt file containing the sampled interpolation grid data \
-        \
-        usage: \
-            FunctionBasedPathModelTool [--help] pathToModel/model.osim \
-        e.g.: \
-            FunctionBasedPathModelTool /home/user/models/Arm26.osim";
+static const char usage[] = "FunctionBasedPathModelTool [--help] MODEL OUTPUT_NAME";
+static const char help_text[] =
+R"(
+ARGS
 
-int main(int argc, char **argv){
-    // skip tool name
+    --help           print this help
+    -v, --verbose    print verbose output
+
+DESCRIPTION
+
+    This tool tries to convert an .osim file (MODEL) that contains
+    `GeometryPath`s and `PointBasedPath`s, into a functionally equivalent model
+    file, written to ${OUTPUT_NAME}.osim, that contains `FunctionBasedPath`s.
+
+    The main reason to do this is performance. Computing a path at each timestep
+    in a simulation can be computationally expensive - especially if the path is
+    complex (e.g. contains complex wrapping geometry). Pre-computing the
+    path's topology ahead of time into a function-based lookup *may* speed up
+    simulations that spend a significant amount of time computing paths.
+
+    This tool effectively:
+
+      - Reads MODEL (the source model)
+      - Searches for `GeometryPath`s and `PointBasedPath`s in the source model
+      - Tries to parameterize those paths against the source model's coordinates
+        (e.g. joint coordinates), to produce an n-dimensional Bezier curve fit
+        of those paths
+      - Saves the fit data to ${OUTPUT_NAME}_DATA_${i}.txt, where `i` is an
+        arbirary ID that links the `FunctionBasedPath` in the output .osim file
+        to the Bezier fit's data
+      - Updates the source model to contain `FunctionBasedPath`s
+      - Writes the updated model to `${OUTPUT_NAME}.osim`
+
+EXAMPLE USAGE
+
+    FunctionBasedPathModelTool RajagopalModel.osim RajagopalModel_Precomputed.osim
+)";
+
+int main(int argc, char **argv) {
+    // skip "FunctionBasedPathModelTool"
     --argc;
     ++argv;
 
-    // parse input arguments
-    std::string pbpModelString;
-    if (argc == 0){
-        std::cout << "Provide an argument ('--help')" << std::endl;
-        return 0;
-    } else if (argc > 1) {
-        std::cout << "Provided too many arguments ('--help')" << std::endl;
-        return 0;
-    } else {
-        char const* arg = argv[0];
-        if (!strcmp(arg,"--help")){
-            std::cout << HELP;
-            return 0;
-        } else {
-            pbpModelString = argv[0];
+    bool verbose = false;
+    char const* sourceModelPath = nullptr;
+    char const* outputName = nullptr;
+
+    // parse CLI args
+    {
+        int nUnnamed = 0;
+        while (argc) {
+            const char* arg = argv[0];
+
+            // handle unnamed args
+            if (arg[0] != '-') {
+                switch (nUnnamed) {
+                case 0:
+                    sourceModelPath = arg;
+                    break;
+                case 1:
+                    outputName = arg;
+                    break;
+                default:
+                    std::cerr << "FunctionBasedPathModelTool: error: too many arguments: should only supply 'MODEL' and 'OUTPUT_NAME'\n\nUSAGE: "
+                              << usage
+                              << std::endl;
+                    return -1;
+                }
+                ++nUnnamed;
+                --argc;
+                ++argv;
+                continue;
+            }
+
+            // flagged args
+            if (std::strcmp(arg, "--help") == 0) {
+                std::cout << "usage: " << usage << '\n' << help_text << std::endl;
+                return 0;
+            } else if (std::strcmp(arg, "--verbose") == 0 || std::strcmp(arg, "-v") == 0) {
+                verbose = true;
+                --argc;
+                ++argv;
+            } else {
+                std::cerr << "FunctionBasedPathModelTool: error: unknown argument '"
+                          << arg
+                          << "': see --help for usage info";
+                return -1;
+            }
         }
-    }
-    Model pbpModel(pbpModelString);
-    Model* fbpModel = pbpModel.clone();
 
-    pbpModel.finalizeConnections();
-    pbpModel.finalizeFromProperties();
-    pbpModel.initSystem();
-    pbpModel.printSubcomponentInfo();
-
-    // Create folder for txt file data and new osim file
-    std::string modelPath = pbpModelString;
-    std::size_t found = modelPath.find_last_of("/\\");
-    std::string modelName = modelPath.substr(found+1);
-    modelName = modelName.substr(0,modelName.find(".",0));
-
-    if (mkdir(modelName.c_str(),0777) == -1){
-        std::cout << "Folder for model; " << modelName << " already created";
-        std::cout << "so I'll just use that one and overwrite everything"
-                  << std::endl;
-    } else {
-        std::cout << "Folder for model; " << modelName << " created"
-                  << std::endl;
-    }
-
-    // Converting
-    std::vector<FunctionBasedPath> fbps;
-    std::vector<PointBasedPath> pbps;
-    std::ofstream printFile;
-    int id = 0;
-
-    for(PathActuator& pa :
-        pbpModel.updComponentList<PathActuator>()){
-        // const reference to a geometrypath
-        auto &pbp = pa.getGeometryPath();
-
-        // dynamic cast to check if its a pointbasedpath
-        const PointBasedPath* pbpp = dynamic_cast<const PointBasedPath*>(&pbp);
-        pbps.push_back(*pbpp);
-        if(pbpp != nullptr){
-            std::cout << "pa: " << pa.getName() << std::endl;
-
-            FunctionBasedPath fbp(pbpModel,*pbpp,id);
-
-            printFile.open(modelName+"/FBP"+std::to_string(id)+".txt");
-            fbp.printContent(printFile);
-
-            fbps.push_back(fbp);
-            id++;
+        if (nUnnamed != 2) {
+            std::cerr << "FunctionBasedPathModelTool: error: too few arguments supplied\n\n"
+                      << usage
+                      << std::endl;
+            return -1;
         }
     }
 
-    int cnt = 0;
-    const PointBasedPath* pbpp;
-    std::vector<PathActuator*> pap;
-    for(PathActuator& pa :
-        fbpModel->updComponentList<PathActuator>()){
-        pap.push_back(&pa);
-    }
-    for (unsigned i=0; i<pap.size(); i++){
-        auto &pbp = pap[i]->getGeometryPath();
-        pbpp = dynamic_cast<const PointBasedPath*>(&pbp);
-        if(pbpp != nullptr){
-            pap[i]->updProperty_GeometryPath().setValue(fbps[cnt]);
-            cnt++;
-        }
-    }
-    fbpModel->finalizeConnections();
-    fbpModel->finalizeFromProperties();
-    fbpModel->initSystem();
-    fbpModel->printSubcomponentInfo();
+    Model sourceModel{sourceModelPath};
+    Model outputModel{sourceModel};
 
-    // Print model to file
-    fbpModel->print(modelName+"FBP.osim");
+    sourceModel.finalizeConnections();
+    sourceModel.finalizeFromProperties();
+    sourceModel.initSystem();
+    if (verbose) {
+        sourceModel.printSubcomponentInfo();
+    }
+
+    // struct for holding source + dest actuators affected by this process
+    struct PathActuatorWithPointBasedPath final {
+        PathActuator& inSource;
+        PathActuator& inOutput;
+
+        PathActuatorWithPointBasedPath(PathActuator& inSource_,
+                                       PathActuator& inOutput_) :
+            inSource{inSource_},
+            inOutput{inOutput_} {
+        }
+    };
+
+    // collect actuators with `PointBasedPath`s (PBPs)
+    std::vector<PathActuatorWithPointBasedPath> actuators;
+    for (auto& pa : sourceModel.updComponentList<PathActuator>()) {
+
+        // if the actuator doesn't use a PBP, ignore it
+        if (!dynamic_cast<PointBasedPath*>(&pa.updGeometryPath())) {
+            continue;
+        }
+
+        // otherwise, find the equivalent path in the destination
+        Component* c = const_cast<Component*>(outputModel.findComponent(pa.getAbsolutePath()));
+
+        if (!c) {
+            std::stringstream err;
+            err << "could not find '" << pa.getAbsolutePathString() << "' in the output model: this is a programming error";
+            throw std::runtime_error{std::move(err).str()};
+        }
+
+        PathActuator* paDest = dynamic_cast<PathActuator*>(c);
+
+        if (!paDest) {
+            std::stringstream err;
+            err << "the component '" << pa.getAbsolutePathString() << "' has a class of '" << pa.getConcreteClassName() << "' in the source model but a class of '" << c->getConcreteClassName() << "' in the destination model: this shouldn't happen";
+            throw std::runtime_error{std::move(err).str()};
+        }
+
+        actuators.emplace_back(pa, *paDest);
+    }
+
+    // for each actuator with a PBP, create an equivalent `FunctionBasedPath`
+    // and handle saving the fits etc.
+    int i = 1;
+    for (const auto& actuator : actuators) {
+        // this should be a safe cast, because it is checked above
+        const auto& pbp =
+            dynamic_cast<const PointBasedPath&>(actuator.inSource.getGeometryPath());
+
+        // create an FBP in-memory
+        FunctionBasedPath fbp = FunctionBasedPath::fromPointBasedPath(sourceModel, pbp);
+
+        // write the FBP's data to the filesystem
+        std::string dataFilename;
+        {
+            std::stringstream ss;
+            ss << outputName << "_DATA_" << i <<  ".txt";
+            dataFilename = std::move(ss).str();
+        }
+
+        std::fstream dataFile{dataFilename};
+
+        if (!dataFile) {
+            std::stringstream msg;
+            msg << "error: could not open a `FunctionBasedPath`'s data file at: " << dataFilename;
+            throw std::runtime_error{std::move(msg).str()};
+        }
+
+        fbp.printContent(dataFile);
+
+        if (!dataFile) {
+            std::stringstream msg;
+            msg << "error: error occurred after writing `FunctionBasedPath`s data to" << dataFilename;
+            throw std::runtime_error{std::move(msg).str()};
+        }
+
+        fbp.setDataPath(dataFilename);
+
+        // assign the FBP to the output model
+        actuator.inOutput.updProperty_GeometryPath().setValue(fbp);
+
+        ++i;
+    }
+
+    // FBPs substitued: perform any final steps and write the output model
+
+    outputModel.finalizeFromProperties();
+    outputModel.initSystem();
+    outputModel.print(std::string{outputName} + ".osim");
+
+    if (verbose) {
+        std::cerr << "--- interpolation complete ---\n\n"
+                  << "model before:\n";
+        sourceModel.printSubcomponentInfo();
+        std::cerr << "\nmodel after:\n";
+        outputModel.printSubcomponentInfo();
+    }
 
     return 0;
 }
