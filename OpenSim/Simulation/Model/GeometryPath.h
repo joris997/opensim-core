@@ -1,5 +1,6 @@
 #ifndef OPENSIM_GEOMETRY_PATH_H_
 #define OPENSIM_GEOMETRY_PATH_H_
+
 /* -------------------------------------------------------------------------- *
  *                          OpenSim:  GeometryPath.h                          *
  * -------------------------------------------------------------------------- *
@@ -23,14 +24,12 @@
  * limitations under the License.                                             *
  * -------------------------------------------------------------------------- */
 
-
 // INCLUDE
 #include <OpenSim/Simulation/osimSimulationDLL.h>
-#include "OpenSim/Simulation/Model/ModelComponent.h"
-#include "PathPointSet.h"
-#include <OpenSim/Simulation/Wrap/PathWrapSet.h>
 #include <OpenSim/Simulation/MomentArmSolver.h>
-
+#include <OpenSim/Simulation/Model/ModelComponent.h>
+#include <OpenSim/Simulation/Model/PathPointSet.h>
+#include <OpenSim/Simulation/Wrap/PathWrapSet.h>
 
 #ifdef SWIG
     #ifdef OSIMSIMULATION_API
@@ -47,23 +46,35 @@ class ScaleSet;
 class WrapResult;
 class WrapObject;
 
-//=============================================================================
-//=============================================================================
 /**
- * A base class representing a path (muscle, ligament, etc.).
- *
- * @author Peter Loan
- * @version 1.0
- */
+  * A base class that represents a path that has a computable length and
+  * lengthening speed.
+  *
+  * This class is typically used in places where the model needs to simulate
+  * the changes in a path over time. For example, in `OpenSim::Muscle`s,
+  * `OpenSim::Ligament`s, etc.
+  *
+  * This class *only* defines a length and lenghtning speed. Do not assume that
+  * an `OpenSim::GeometryPath` is a straight line between two points, or assume
+  * that it is many straight lines between `n` points. The derived
+  * implementation may define a path using points, or it may define a path using
+  * a curve fit. It may also define a path as
+  * `length == 17.3f && lengtheningSpeed == 5.0f`. All of those definitions are
+  * *logically* valid - even if they aren't *functionally* valid
+  */
 class OSIMSIMULATION_API GeometryPath : public ModelComponent {
 OpenSim_DECLARE_ABSTRACT_OBJECT(GeometryPath, ModelComponent);
-    //=============================================================================
-    // OUTPUTS
-    //=============================================================================
+
+//=============================================================================
+// OUTPUTS
+//=============================================================================
     OpenSim_DECLARE_OUTPUT(length, double, getLength, SimTK::Stage::Position);
-    // 
-    OpenSim_DECLARE_OUTPUT(lengthening_speed, double, getLengtheningSpeed,
-        SimTK::Stage::Velocity);
+
+    OpenSim_DECLARE_OUTPUT(
+            lengthening_speed,
+            double,
+            getLengtheningSpeed,
+            SimTK::Stage::Velocity);
 
 //=============================================================================
 // DATA
@@ -79,8 +90,8 @@ private:
     OpenSim_DECLARE_UNNAMED_PROPERTY(PathWrapSet,
         "The wrap objects that are associated with this path");
 
-    // used for scaling tendon and fiber lengths
 protected:
+    // used for scaling tendon and fiber lengths
     double _preScaleLength;
 
     // Solver used to compute moment-arms. The GeometryPath owns this object,
@@ -96,40 +107,35 @@ protected:
 //=============================================================================
 // METHODS
 //=============================================================================
-    //--------------------------------------------------------------------------
-    // CONSTRUCTION
-    //--------------------------------------------------------------------------
 public:
     GeometryPath();
-    ~GeometryPath() override = default;
 
     const PathPointSet& getPathPointSet() const { return get_PathPointSet(); }
+    void setPathPointSet(const PathPointSet& pps) { upd_PathPointSet() = pps; }
     PathPointSet& updPathPointSet() { return upd_PathPointSet(); }
+
     const PathWrapSet& getWrapSet() const { return get_PathWrapSet(); }
+    void setPathWrapSet(const PathWrapSet& pws) { upd_PathWrapSet() = pws; }
     PathWrapSet& updWrapSet() { return upd_PathWrapSet(); }
     void addPathWrap(WrapObject& aWrapObject);
 
-    void setPathPointSet(const PathPointSet& pps) { upd_PathPointSet() = pps; }
-    void setPathWrapSet(const PathWrapSet& pws) { upd_PathWrapSet() = pws; }
     //--------------------------------------------------------------------------
     // UTILITY
     //--------------------------------------------------------------------------
+    const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const;
     AbstractPathPoint* addPathPoint(const SimTK::State& s, int index,
         const PhysicalFrame& frame);
     AbstractPathPoint* appendNewPathPoint(const std::string& proposedName, 
         const PhysicalFrame& frame, const SimTK::Vec3& locationOnFrame);
-    bool canDeletePathPoint( int index);
+    bool canDeletePathPoint(int index);
     bool deletePathPoint(const SimTK::State& s, int index);
-    
+    bool replacePathPoint(const SimTK::State& s,
+                          AbstractPathPoint* oldPathPoint,
+                          AbstractPathPoint* newPathPoint);
+
     void moveUpPathWrap(const SimTK::State& s, int index);
     void moveDownPathWrap(const SimTK::State& s, int index);
     void deletePathWrap(const SimTK::State& s, int index);
-    bool replacePathPoint(const SimTK::State& s, AbstractPathPoint* oldPathPoint,
-        AbstractPathPoint* newPathPoint); 
-
-    //--------------------------------------------------------------------------
-    // GET
-    //--------------------------------------------------------------------------
 
     /** If you call this prior to extendAddToSystem() it will be used to initialize
     the color cache variable. Otherwise %GeometryPath will choose its own
@@ -137,7 +143,8 @@ public:
     void setDefaultColor(const SimTK::Vec3& color) {
         updProperty_Appearance().setValueIsDefault(false);
         upd_Appearance().set_color(color); 
-    };
+    }
+
     /** Returns the color that will be used to initialize the color cache
     at the next extendAddToSystem() call. The actual color used to draw the path
     will be taken from the cache variable, so may have changed. **/
@@ -160,7 +167,6 @@ public:
 
     double getPreScaleLength( const SimTK::State& s) const;
     void setPreScaleLength( const SimTK::State& s, double preScaleLength);
-    const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const;
 
     /** Get methods are made non-const as when the GeometryPath is a FunctionBased-
     Path, the Interpolation object inside of it changes after every evaluation **/

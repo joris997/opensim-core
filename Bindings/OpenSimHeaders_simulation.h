@@ -113,7 +113,6 @@
 #include <OpenSim/Simulation/Model/GeometryPath.h>
 #include <OpenSim/Simulation/Model/FunctionBasedPath.h>
 #include <OpenSim/Simulation/Model/PointBasedPath.h>
-#include <OpenSim/Simulation/Model/Interpolate.h>
 
 #include <OpenSim/Simulation/Model/Ligament.h>
 #include <OpenSim/Simulation/Model/Blankevoort1991Ligament.h>
