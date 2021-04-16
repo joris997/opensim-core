@@ -102,6 +102,8 @@ public:
     FunctionBasedPath& operator=(FunctionBasedPath&&);
     ~FunctionBasedPath() noexcept override;
 
+    void extendFinalizeFromProperties() override;
+
     double getLength(const SimTK::State& s) const override;
     void setLength(const SimTK::State& s, double length) const override;
 

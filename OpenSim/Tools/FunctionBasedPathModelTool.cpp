@@ -49,7 +49,7 @@ EXAMPLE USAGE
 )";
 
 int main(int argc, char **argv) {
-    // skip "FunctionBasedPathModelTool"
+    // skip exe name
     --argc;
     ++argv;
 
@@ -66,10 +66,10 @@ int main(int argc, char **argv) {
             // handle unnamed args
             if (arg[0] != '-') {
                 switch (nUnnamed) {
-                case 0:
+                case 0:  // MODEL
                     sourceModelPath = arg;
                     break;
-                case 1:
+                case 1:  // OUTPUT_NAME
                     outputName = arg;
                     break;
                 default:
@@ -78,13 +78,14 @@ int main(int argc, char **argv) {
                               << std::endl;
                     return -1;
                 }
+
                 ++nUnnamed;
                 --argc;
                 ++argv;
                 continue;
             }
 
-            // flagged args
+            // handle flagged args (e.g. --arg)
             if (std::strcmp(arg, "--help") == 0) {
                 std::cout << "usage: " << usage << '\n' << help_text << std::endl;
                 return 0;
@@ -106,6 +107,10 @@ int main(int argc, char **argv) {
                       << std::endl;
             return -1;
         }
+
+        assert(argc == 0);
+        assert(sourceModelPath != nullptr);
+        assert(outputName != nullptr);
     }
 
     Model sourceModel{sourceModelPath};
@@ -118,24 +123,31 @@ int main(int argc, char **argv) {
         sourceModel.printSubcomponentInfo();
     }
 
-    // struct for holding source + dest actuators affected by this process
-    struct PathActuatorWithPointBasedPath final {
-        PathActuator& inSource;
-        PathActuator& inOutput;
+    // struct that holds how a PBP in the source maps onto an actuator in the
+    // destination
+    struct PBPtoActuatorMapping final {
+        PointBasedPath& sourcePBP;
+        PathActuator& outputActuator;
 
-        PathActuatorWithPointBasedPath(PathActuator& inSource_,
-                                       PathActuator& inOutput_) :
-            inSource{inSource_},
-            inOutput{inOutput_} {
+        PBPtoActuatorMapping(PointBasedPath& sourcePBP_,
+                             PathActuator& outputActuator_) :
+            sourcePBP{sourcePBP_},
+            outputActuator{outputActuator_} {
         }
     };
 
-    // collect actuators with `PointBasedPath`s (PBPs)
-    std::vector<PathActuatorWithPointBasedPath> actuators;
+    // find PBPs in the source and figure out how they map onto `PathActuator`s
+    // in the destination
+    //
+    // (this is because `PathActuator`s are the "owners" of `GeometryPath`s in
+    //  most models)
+    std::vector<PBPtoActuatorMapping> mappings;
     for (auto& pa : sourceModel.updComponentList<PathActuator>()) {
 
+        PointBasedPath* pbp = dynamic_cast<PointBasedPath*>(&pa.updGeometryPath());
+
         // if the actuator doesn't use a PBP, ignore it
-        if (!dynamic_cast<PointBasedPath*>(&pa.updGeometryPath())) {
+        if (!pbp) {
             continue;
         }
 
@@ -156,29 +168,25 @@ int main(int argc, char **argv) {
             throw std::runtime_error{std::move(err).str()};
         }
 
-        actuators.emplace_back(pa, *paDest);
+        mappings.emplace_back(*pbp, *paDest);
     }
 
-    // for each actuator with a PBP, create an equivalent `FunctionBasedPath`
-    // and handle saving the fits etc.
+    // for each `PathActuator` that uses a PBP, create an equivalent
+    // `FunctionBasedPath` (FBP) by fitting a function against the PBP and
+    // replace the PBP owned by the destination's `PathActuator` with the FBP
     int i = 1;
-    for (const auto& actuator : actuators) {
-        // this should be a safe cast, because it is checked above
-        const auto& pbp =
-            dynamic_cast<const PointBasedPath&>(actuator.inSource.getGeometryPath());
-
+    for (const auto& mapping : mappings) {
         // create an FBP in-memory
-        FunctionBasedPath fbp = FunctionBasedPath::fromPointBasedPath(sourceModel, pbp);
+        FunctionBasedPath fbp = FunctionBasedPath::fromPointBasedPath(sourceModel, mapping.sourcePBP);
 
         // write the FBP's data to the filesystem
-        std::string dataFilename;
-        {
+        std::string dataFilename = [&outputName, &i]() {
             std::stringstream ss;
             ss << outputName << "_DATA_" << i <<  ".txt";
-            dataFilename = std::move(ss).str();
-        }
+            return std::move(ss).str();
+        }();
 
-        std::fstream dataFile{dataFilename};
+        std::ofstream dataFile{dataFilename};
 
         if (!dataFile) {
             std::stringstream msg;
@@ -194,15 +202,18 @@ int main(int argc, char **argv) {
             throw std::runtime_error{std::move(msg).str()};
         }
 
+        // update the FBP to refer to the data file
         fbp.setDataPath(dataFilename);
 
-        // assign the FBP to the output model
-        actuator.inOutput.updProperty_GeometryPath().setValue(fbp);
+        // assign the FBP over the destination's PBP
+        mapping.outputActuator.updProperty_GeometryPath().setValue(fbp);
 
         ++i;
     }
 
-    // FBPs substitued: perform any final steps and write the output model
+    // the output model is now the same as the source model, but each PBP in
+    // its `PathActuator`s has been replaced with an FBP. Perform any final
+    // model-level fixups and save the output model.
 
     outputModel.finalizeFromProperties();
     outputModel.initSystem();
