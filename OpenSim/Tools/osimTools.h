@@ -28,6 +28,7 @@
 #include "CMCTool.h"
 #include "ForwardTool.h"
 #include "AnalyzeTool.h"
+#include "FunctionBasedPathConversionTool.h"
 
 #include "InverseKinematicsTool.h"
 #include "InverseDynamicsTool.h"
