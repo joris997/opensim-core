@@ -93,7 +93,7 @@ public:
      *
      * The file must contain the content written by `printContent`
      */
-    static FunctionBasedPath fromDataFile(const std::string& path);
+    FunctionBasedPath fromDataFile(const std::string& path);
 
     FunctionBasedPath();
     FunctionBasedPath(const FunctionBasedPath&);
@@ -103,6 +103,7 @@ public:
     ~FunctionBasedPath() noexcept override;
 
     void extendFinalizeFromProperties() override;
+    void extendFinalizeConnections(Component &root) override;
 
     double getLength(const SimTK::State& s) const override;
     void setLength(const SimTK::State& s, double length) const override;

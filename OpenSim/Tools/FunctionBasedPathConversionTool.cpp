@@ -9,7 +9,6 @@
 #include <sstream>
 
 using namespace OpenSim;
-using namespace std;
 
 FunctionBasedPathConversionTool::~FunctionBasedPathConversionTool()
 {
@@ -24,14 +23,14 @@ FunctionBasedPathConversionTool::FunctionBasedPathConversionTool()
 }
 
 FunctionBasedPathConversionTool::FunctionBasedPathConversionTool(
-        const string modelPath, const string newModelName)
+        const std::string modelPath, const std::string newModelName)
     : _modelPath(modelPath), _newModelName(newModelName)
 {
 
 }
 
 bool FunctionBasedPathConversionTool::run(){
-//    try{
+    try{
         Model sourceModel{_modelPath};
         Model outputModel{sourceModel};
 
@@ -39,7 +38,10 @@ bool FunctionBasedPathConversionTool::run(){
         sourceModel.finalizeFromProperties();
         sourceModel.initSystem();
 
-        bool verbose = false;
+        outputModel.finalizeConnections();
+        outputModel.finalizeFromProperties();
+
+        bool verbose = true;
         if (verbose) {
             sourceModel.printSubcomponentInfo();
         }
@@ -62,7 +64,7 @@ bool FunctionBasedPathConversionTool::run(){
         //
         // (this is because `PathActuator`s are the "owners" of `GeometryPath`s in
         //  most models)
-        vector<PBPtoActuatorMapping> mappings;
+        std::vector<PBPtoActuatorMapping> mappings;
         for (auto& pa : sourceModel.updComponentList<PathActuator>()) {
 
             PointBasedPath* pbp = dynamic_cast<PointBasedPath*>(&pa.updGeometryPath());
@@ -76,17 +78,17 @@ bool FunctionBasedPathConversionTool::run(){
             Component* c = const_cast<Component*>(outputModel.findComponent(pa.getAbsolutePath()));
 
             if (!c) {
-                stringstream err;
+                std::stringstream err;
                 err << "could not find '" << pa.getAbsolutePathString() << "' in the output model: this is a programming error";
-                throw runtime_error{move(err).str()};
+                throw std::runtime_error{move(err).str()};
             }
 
             PathActuator* paDest = dynamic_cast<PathActuator*>(c);
 
             if (!paDest) {
-                stringstream err;
+                std::stringstream err;
                 err << "the component '" << pa.getAbsolutePathString() << "' has a class of '" << pa.getConcreteClassName() << "' in the source model but a class of '" << c->getConcreteClassName() << "' in the destination model: this shouldn't happen";
-                throw runtime_error{move(err).str()};
+                throw std::runtime_error{move(err).str()};
             }
 
             mappings.emplace_back(*pbp, *paDest);
@@ -96,32 +98,32 @@ bool FunctionBasedPathConversionTool::run(){
         // `FunctionBasedPath` (FBP) by fitting a function against the PBP and
         // replace the PBP owned by the destination's `PathActuator` with the FBP
         int i = 1;
-        string newModelNameLocal = _newModelName;
+        std::string newModelNameLocal = _newModelName;
         for (const auto& mapping : mappings) {
             // create an FBP in-memory
             FunctionBasedPath fbp = FunctionBasedPath::fromPointBasedPath(sourceModel, mapping.sourcePBP);
 
             // write the FBP's data to the filesystem
-            string dataFilename = [newModelNameLocal, &i]() {
-                stringstream ss;
+            std::string dataFilename = [newModelNameLocal, &i]() {
+                std::stringstream ss;
                 ss << newModelNameLocal << "_DATA_" << i <<  ".txt";
                 return move(ss).str();
             }();
 
-            ofstream dataFile{dataFilename};
+            std::ofstream dataFile{dataFilename};
 
             if (!dataFile) {
-                stringstream msg;
+                std::stringstream msg;
                 msg << "error: could not open a `FunctionBasedPath`'s data file at: " << dataFilename;
-                throw runtime_error{move(msg).str()};
+                throw std::runtime_error{move(msg).str()};
             }
 
             fbp.printContent(dataFile);
 
             if (!dataFile) {
-                stringstream msg;
+                std::stringstream msg;
                 msg << "error: error occurred after writing `FunctionBasedPath`s data to" << dataFilename;
-                throw runtime_error{move(msg).str()};
+                throw std::runtime_error{move(msg).str()};
             }
 
             // update the FBP to refer to the data file
@@ -138,20 +140,21 @@ bool FunctionBasedPathConversionTool::run(){
         // model-level fixups and save the output model.
 
         outputModel.finalizeFromProperties();
+        outputModel.finalizeConnections();
         outputModel.initSystem();
-        outputModel.print(string{_newModelName} + ".osim");
+        outputModel.print(std::string{_newModelName} + ".osim");
 
         if (verbose) {
-            cerr << "--- interpolation complete ---\n\n"
+            std::cerr << "--- interpolation complete ---\n\n"
                       << "model before:\n";
             sourceModel.printSubcomponentInfo();
-            cerr << "\nmodel after:\n";
+            std::cerr << "\nmodel after:\n";
             outputModel.printSubcomponentInfo();
         }
-//    } catch(const std::exception& x) {
-//        log_error("Exception in FunctionBasedPathConversionTool: run", x.what());
-//        return false;
-//    }
+    } catch(const std::exception& x) {
+        log_error("Exception in FunctionBasedPathConversionTool: run", x.what());
+        return false;
+    }
 
     return true;
 }

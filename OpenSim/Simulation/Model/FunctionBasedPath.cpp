@@ -145,61 +145,26 @@ public:
         }
     }
 
-    // Constructor for non FBP/PBP related interpolation
+    // Precomputed data constructor without explicit coords
     Interpolate(
-            std::vector<std::vector<double>> discretizationIn,
-            std::vector<std::pair<std::vector<int>,double>> evalsPair) :
+            std::vector<Discretization> dSIn,
+            std::vector<double> evalsIn) :
 
-        dimensions(static_cast<int>(discretizationIn.size())),
-        discretizations(discretizationIn),
-        n(dimensions,0),
-        u(dimensions,0),
-        loc(dimensions,0)
+        dimensions(static_cast<int>(dSIn.size())),
+        evals(evalsIn),
+        n(dimensions, 0),
+        u(dimensions, 0),
+        loc(dimensions, 0),
+        dS(dSIn),
+        coords(std::vector<const OpenSim::Coordinate*>(static_cast<size_t>(dimensions)))
     {
-        assert(discretizations.size() == evalsPair[0].first.size());
+        std::vector<double> dc_;
+        for (size_t i = 0; i < static_cast<size_t>(dimensions); i++) {
+            beta.push_back({0, 0, 0, 0});
 
-        // allow it to work with the new struct method
-        for (int i = 0; i < dimensions; i++) {
-            Discretization dc;
-            dc.begin = discretizations[i][0];
-            dc.end = discretizations[i][discretizations[i].size()-1];
-            dc.nPoints = static_cast<int>(discretizations[i].size());
-            dc.gridsize = (dc.end - dc.begin)/(dc.nPoints-1);
-
-            dS.push_back(dc);
-        }
-
-        for (int i = 0; i < dimensions; i++) {
-            beta.push_back({0,0,0,0});
-            discSizes.push_back(discretizations[i].size());
-        }
-
-        // I'm aware this is still stupid but it is what it is for now
-        int numOfLoops = 1;
-        for (int i = 0; i < dimensions; i++) {
-            numOfLoops *= discretizations[i].size();
-        }
-
-        std::vector<int> cnt(dimensions, 0);
-        for (int i = 0; i < numOfLoops; i++) {
-            for (unsigned k = 0; k < evalsPair.size(); k++) {
-                if (evalsPair[k].first == cnt) {
-                    evals.push_back(evalsPair[k].second);
-                }
-            }
-
-            for (int x = dimensions - 1; x >= 0; x--) {
-                if (cnt[x] != dS[x].nPoints-1) {
-                    cnt[x] += 1;
-                    break;
-                }
-
-                if (cnt[x] == dS[x].nPoints-1) {
-                    for (int y = x; y < dimensions; y++) {
-                        cnt[y] = 0;
-                    }
-                }
-            }
+            linspace(dS[i], dc_);
+            discretizations.push_back(dc_);
+            discSizes.push_back(dS[i].gridsize);
         }
     }
 
@@ -316,6 +281,14 @@ public:
 
     std::vector<Discretization> getdS() const {
         return dS;
+    }
+
+    std::vector<const OpenSim::Coordinate *> getCoords() const {
+        return coords;
+    }
+
+    void setCoords(std::vector<const OpenSim::Coordinate*> coordsIn) {
+        coords = coordsIn;
     }
 
     std::vector<double> getEvals() const {
@@ -555,7 +528,7 @@ OpenSim::FunctionBasedPath OpenSim::FunctionBasedPath::fromPointBasedPath(
     }
 
     // create vector for number of interpolation points
-    std::vector<int> nPoints(coordsThatAffectPBP.size(), 5);
+    std::vector<int> nPoints(coordsThatAffectPBP.size(), 80);
 
     // reinitialize the default-initialized interp with the points
     fbp._impl->interp = Interpolate{
@@ -633,7 +606,7 @@ static Interpolate readInterp(const std::string &path) {
     while (std::getline(file, line)) {
         ++lineno;
 
-        if (line.empty()) {
+        if (lineno >= 2) {
             break;
         }
     }
@@ -642,7 +615,6 @@ static Interpolate readInterp(const std::string &path) {
     int dimensions = -1;
     while (std::getline(file, line)) {
         ++lineno;
-
         if (line.empty()) {
             if (dimensions <= -1) {
                 std::stringstream msg;
@@ -653,6 +625,24 @@ static Interpolate readInterp(const std::string &path) {
         }
 
         dimensions = std::stoi(line.c_str());
+    }
+
+    // COORDINATES
+    std::string coordsExist = "";
+    std::vector<std::string> coordinates;
+    while (std::getline(file,line)) {
+        ++lineno;
+
+        if (line.empty()) {
+            if (coordsExist == ""){
+                std::stringstream msg;
+                msg << path << ": L" << lineno << ": unexpected blank line (expected coordinates)";
+                OPENSIM_THROW(OpenSim::Exception, std::move(msg).str());
+            }
+            break;
+        }
+        coordsExist = line.c_str();
+        coordinates.push_back(line.c_str());
     }
 
     // [DISCRETIZATION_1..DISCRETIZATION_n]
@@ -691,9 +681,9 @@ static Interpolate readInterp(const std::string &path) {
 
     // sanity check
     {
-        size_t expectedEvals = 0;
+        size_t expectedEvals = 1;
         for (const Discretization& d : discretizations) {
-            expectedEvals += static_cast<size_t>(d.nPoints);
+            expectedEvals *= static_cast<size_t>(d.nPoints);
         }
 
         if (expectedEvals != evals.size()) {
@@ -703,14 +693,81 @@ static Interpolate readInterp(const std::string &path) {
         }
     }
 
-    // TODO: figure out which coordinates affect this path - must be serialized
-    //       in the file
-
     return Interpolate{
         std::vector<const OpenSim::Coordinate*>(static_cast<size_t>(dimensions)),
         std::move(discretizations),
         std::move(evals)
     };
+}
+
+static std::vector<const OpenSim::Coordinate*> readInterpCoords(const std::string &path, OpenSim::Component &root){
+    std::ifstream file{path};
+
+    if (!file) {
+        std::stringstream msg;
+        msg << path << ": error opening FunctionBasedPath data file";
+        OPENSIM_THROW(OpenSim::Exception, std::move(msg).str());
+    }
+
+    int lineno = 0;
+    std::string line;
+
+    // ID (ignored)
+    while (std::getline(file, line)) {
+        ++lineno;
+
+        if (lineno >= 2) {
+            break;
+        }
+    }
+
+    // DIMENSIONS
+    int dimensions = -1;
+    while (std::getline(file, line)) {
+        ++lineno;
+        if (line.empty()) {
+            if (dimensions <= -1) {
+                std::stringstream msg;
+                msg << path << ": L" << lineno << ": unexpected blank line (expected dimensions)";
+                OPENSIM_THROW(OpenSim::Exception, std::move(msg).str());
+            }
+            break;
+        }
+
+        dimensions = std::stoi(line.c_str());
+    }
+
+    // COORDINATES
+    std::string coordsExist = "";
+    std::vector<std::string> coordinates;
+    while (std::getline(file,line)) {
+        ++lineno;
+
+        if (line.empty()) {
+            if (coordsExist == ""){
+                std::stringstream msg;
+                msg << path << ": L" << lineno << ": unexpected blank line (expected coordinates)";
+                OPENSIM_THROW(OpenSim::Exception, std::move(msg).str());
+            }
+            break;
+        }
+        coordsExist = line.c_str();
+        coordinates.push_back(line.c_str());
+    }
+
+    std::vector<const OpenSim::Coordinate*> coords;
+    for (std::string coord : coordinates){
+        const OpenSim::Component& comp = root.getComponent(coord);
+        std::cerr << "coord: " << coord << std::endl;
+        std::cerr << "comp.getabsolutepathstring: " << comp.getAbsolutePathString() << std::endl;
+        std::cerr << "comp.getconreteclassname: " << comp.getConcreteClassName() << std::endl;
+        if (comp.getAbsolutePathString() == coord){
+            const OpenSim::Coordinate* c = dynamic_cast<const OpenSim::Coordinate*>(&comp);
+            std::cerr << "c.name: " << c->getName() << std::endl;
+            coords.push_back(c);
+        }
+    }
+    return coords;
 }
 
 OpenSim::FunctionBasedPath OpenSim::FunctionBasedPath::fromDataFile(const std::string &path)
@@ -721,6 +778,7 @@ OpenSim::FunctionBasedPath OpenSim::FunctionBasedPath::fromDataFile(const std::s
     // the data file effectively only contains data for Interpolate, data file
     // spec is in there
     fbp._impl->interp = readInterp(path);
+//    this->finalizeConnections();
 
     return fbp;
 }
@@ -735,7 +793,10 @@ OpenSim::FunctionBasedPath& OpenSim::FunctionBasedPath::operator=(const Function
 OpenSim::FunctionBasedPath& OpenSim::FunctionBasedPath::operator=(FunctionBasedPath&&) = default;
 OpenSim::FunctionBasedPath::~FunctionBasedPath() noexcept = default;
 
-void OpenSim::FunctionBasedPath::extendFinalizeFromProperties() {
+void OpenSim::FunctionBasedPath::extendFinalizeFromProperties()
+{
+    Super::extendFinalizeFromProperties();
+
     bool hasBackingFile = !get_data_path().empty();
     bool hasInMemoryFittingData =  !_impl->interp.getdS().empty();
 
@@ -751,6 +812,33 @@ void OpenSim::FunctionBasedPath::extendFinalizeFromProperties() {
         // error: has no backing file and has no in-memory fitting data
         std::stringstream msg;
         msg << getAbsolutePathString() << ": cannot call `.finalizeFromProperties()` on this `" << getConcreteClassName() << "`: the path has no fitting associated with it. A `FunctionBasedPath` must either have a valid `data_path` property that points to its underlying fitting data data, or be initialized using `FunctionBasedPath::fromPointBasedPath` (i.e. generate new fitting data)";
+        OPENSIM_THROW(OpenSim::Exception, std::move(msg).str());
+    }
+}
+
+void OpenSim::FunctionBasedPath::extendFinalizeConnections(OpenSim::Component &root)
+{
+//    Super::extendFinalizeConnections(root);
+
+    Model* model = dynamic_cast<Model*>(&root);
+    // Allow (model) component to include its own subcomponents
+    // before calling the base method which automatically invokes
+    // connect all the subcomponents.
+    if (model)
+        connectToModel(*model);
+
+    bool hasBackingFile = !get_data_path().empty();
+    bool hasInMemoryFittingData =  !_impl->interp.getdS().empty();
+    if (hasBackingFile) {
+        // set the coordinates
+        _impl->interp.setCoords(readInterpCoords(get_data_path(),root));
+    } else if (hasInMemoryFittingData) {
+        // do nothing: just use the already-loaded in-memory fitting data
+        return;
+    } else {
+        // error: has no backing file and has no in-memory fitting data
+        std::stringstream msg;
+        msg << getAbsolutePathString() << ": cannot call `.finalizeConnections()` on this `" << getConcreteClassName() << "`: the path has no fitting associated with it. A `FunctionBasedPath` must either have a valid `data_path` property that points to its underlying fitting data data, or be initialized using `FunctionBasedPath::fromPointBasedPath` (i.e. generate new fitting data)";
         OPENSIM_THROW(OpenSim::Exception, std::move(msg).str());
     }
 }
@@ -806,6 +894,12 @@ void OpenSim::FunctionBasedPath::printContent(std::ostream& out) const
         << _impl->interp.getDimension() << '\n'
         << '\n';
 
+    // COORDINATES
+    for (const Coordinate* c : _impl->interp.getCoords()){
+        out << c->getAbsolutePathString() << "\n";
+    }
+    out << "\n";
+
     // DISCRETIZATIONS
     for (const Discretization& d : _impl->interp.getdS()) {
         out << d.begin << '\t'
@@ -822,3 +916,63 @@ void OpenSim::FunctionBasedPath::printContent(std::ostream& out) const
 
     out.flush();
 }
+
+
+
+//// Constructor for non FBP/PBP related interpolation
+//Interpolate(
+//        std::vector<std::vector<double>> discretizationIn,
+//        std::vector<std::pair<std::vector<int>,double>> evalsPair) :
+
+//    dimensions(static_cast<int>(discretizationIn.size())),
+//    discretizations(discretizationIn),
+//    n(dimensions,0),
+//    u(dimensions,0),
+//    loc(dimensions,0)
+//{
+//    assert(discretizations.size() == evalsPair[0].first.size());
+
+//    // allow it to work with the new struct method
+//    for (int i = 0; i < dimensions; i++) {
+//        Discretization dc;
+//        dc.begin = discretizations[i][0];
+//        dc.end = discretizations[i][discretizations[i].size()-1];
+//        dc.nPoints = static_cast<int>(discretizations[i].size());
+//        dc.gridsize = (dc.end - dc.begin)/(dc.nPoints-1);
+
+//        dS.push_back(dc);
+//    }
+
+//    for (int i = 0; i < dimensions; i++) {
+//        beta.push_back({0,0,0,0});
+//        discSizes.push_back(discretizations[i].size());
+//    }
+
+//    // I'm aware this is still stupid but it is what it is for now
+//    int numOfLoops = 1;
+//    for (int i = 0; i < dimensions; i++) {
+//        numOfLoops *= discretizations[i].size();
+//    }
+
+//    std::vector<int> cnt(dimensions, 0);
+//    for (int i = 0; i < numOfLoops; i++) {
+//        for (unsigned k = 0; k < evalsPair.size(); k++) {
+//            if (evalsPair[k].first == cnt) {
+//                evals.push_back(evalsPair[k].second);
+//            }
+//        }
+
+//        for (int x = dimensions - 1; x >= 0; x--) {
+//            if (cnt[x] != dS[x].nPoints-1) {
+//                cnt[x] += 1;
+//                break;
+//            }
+
+//            if (cnt[x] == dS[x].nPoints-1) {
+//                for (int y = x; y < dimensions; y++) {
+//                    cnt[y] = 0;
+//                }
+//            }
+//        }
+//    }
+//}
