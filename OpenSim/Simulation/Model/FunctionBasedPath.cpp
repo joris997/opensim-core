@@ -13,6 +13,34 @@
 #include <numeric>
 #include <sstream>
 
+template <typename T>
+void printVector(std::vector<T> vec){
+    std::cout << "vec["<<vec.size()<<"]: [";
+    for (unsigned i=0; i<vec.size(); i++){
+        std::cout << vec[i] << ",";
+    }
+    std::cout << "]" << std::endl;
+}
+
+// defer an action until the destruction of this wrapper
+template<typename Callback>
+struct Defer final {
+    Callback cb;
+    Defer(Callback _cb) : cb{std::move(_cb)} {
+    }
+    Defer(Defer const&) = delete;
+    Defer(Defer&&) noexcept = default;
+    Defer& operator=(Defer const&) = delete;
+    Defer& operator=(Defer&&) = delete;
+    ~Defer() noexcept {
+        cb();
+    }
+};
+template<typename Callback>
+Defer<Callback> defer_action(Callback cb) {
+    return Defer<Callback>{std::move(cb)};
+}
+
 // Returns `true` if changing the supplied `Coordinate` changes the moment arm
 // of the supplied `PointBasedPath` (PBP)
 static bool coordinateAffectsPBP(
@@ -114,14 +142,18 @@ private:
     // vector of an index in the evalsPair
     std::vector<int> loc;
 
-    // OPENSIM INTEGRATION
+    // discretization vector containing, for each dimension, a struct that
+    // contains [begin, end, number of points, step-size]
     std::vector<Discretization> dS;
+
+    // vector of coordinate pointers which are used to relate an incoming state
+    // to a vector of relevant coordinates for the interpolation
     std::vector<const OpenSim::Coordinate *> coords;
 
 public:
     Interpolate() = default;
 
-    // Precomputed data constructor
+    // Precomputed data constructor (length evaluations are already known)
     Interpolate(
             std::vector<OpenSim::Coordinate const*> coordsIn,
             std::vector<Discretization> dSIn,
@@ -146,6 +178,10 @@ public:
     }
 
     // Precomputed data constructor without explicit coords
+    // used as a creation of an interpolation object after reading the data in
+    // extendFinalizeProperties. The coordinates are then related when the
+    // model is connected (as we need to sample the coordinates that affect a
+    // muscle again)
     Interpolate(
             std::vector<Discretization> dSIn,
             std::vector<double> evalsIn) :
@@ -169,8 +205,9 @@ public:
     }
 
     // General interface constructor
-    // allows one to create an interface constructor as shown below
-    // with a vector of coordinates
+    // allows one to create an interface constructor as shown below with a
+    // vector of coordinates. This is the 'from scratch' constructor that you
+    // could use manually
     Interpolate(OpenSim::PointBasedPath const& pbp,
                 OpenSim::Coordinate const** cBegin,
                 OpenSim::Coordinate const** cEnd,
@@ -187,16 +224,23 @@ public:
         assert(n > 0);
         assert(dimensions == (int)n);
 
-        // put all coordinate pointers in a vector to later unpack an incoming
-        // state to a vector of coordinate values
         for (int i = 0; i < dimensions; i++) {
+            // put all coordinate pointers in a vector to later unpack an
+            // incoming state to a vector of coordinate values
             coords.push_back(cBegin[i]);
+            // fill an n-dimensional vector of 4 sized vectors which represent
+            // the polynomial values
+            beta.push_back({0,0,0,0});
         }
 
         // unlock coordinates
         for (int i = 0; i < dimensions; i++) {
             const OpenSim::Coordinate& c = *cBegin[i];
+            bool c_was_locked = c.getLocked(st);
             c.setLocked(st, false);
+            auto unlock_c = defer_action([&] { c.setLocked(st, c_was_locked); });
+            double c_initial_value = c.getValue(st);
+            auto reset_c_val = defer_action([&] { c.setValue(st, c_initial_value); });
         }
 
         // make discretization objects for interpolation class instance
@@ -249,8 +293,6 @@ public:
         // just make it for using the old getInterp method
         std::vector<double> dc_;
         for (int i = 0; i < dimensions; i++) {
-            beta.push_back({0,0,0,0});
-
             dc_.clear();
             linspace(dS[i].begin, dS[i].end, dS[i].nPoints, dc_);
             discretizations.push_back(dc_);
@@ -304,7 +346,7 @@ public:
         for (int i = 0; i < dimensions-1; i++) {
             factor = 1;
             for (int ii = i+1; ii <= dimensions-1; ii++) {
-                factor *= discSizes[ii];
+                factor *= dS[ii].nPoints;
             }
             idx += loc[i]*factor;
         }
@@ -322,30 +364,36 @@ public:
         // OUT: eval, the interpolated value
         assert(x.size() == dimensions);
 
+//        // get the index of the closest range value to the discretization point
+//        for (int i = 0; i < dimensions; i++){
+//            n[i] = floor((x[i]-dS[i].begin)/dS[i].gridsize);
+//        }
+
+//        // compute remaining fraction
+//        for (int i = 0; i < dimensions; i++){
+//            u[i] = (x[i]-(dS[i].begin + n[i]*dS[i].gridsize))/(dS[i].gridsize);
+//        }
         // get the index of the closest range value to the discretization point
-        for (int i = 0; i < dimensions; i++) {
+        for (int i=0; i<dimensions; i++){
             auto it = std::find_if(std::begin(discretizations[i]),
                                    std::end(discretizations[i]),
                                    [&](double j){return j >= x[i];});
-
-            n[i] = static_cast<int>(std::distance(discretizations[i].begin(), it) - 1);
+            n[i] = std::distance(discretizations[i].begin(), it)-1;
         }
 
         // compute remaining fraction
-        for (int i = 0; i < dimensions; i++) {
+        for (int i=0; i<dimensions; i++){
             u[i] = (x[i]-discretizations[i][n[i]])/
                     (discretizations[i][2]-discretizations[i][1]);
         }
 
         // compute the polynomials (already evaluated)
-        for (int i = 0; i < dimensions; i++) {
+        for (int i = 0; i < dimensions; i++){
             // compute binomial coefficient
-            beta[i][0] = 0.5*(u[i]-1)*(u[i]-1)*(u[i]-1)*u[i]*(2*u[i]+1);
-            beta[i][1] = -0.5*(u[i] - 1)*(6*u[i]*u[i]*u[i]*u[i] -
-                                          9*u[i]*u[i]*u[i] + 2*u[i] + 2);
-            beta[i][2] = 0.5*u[i]*(6*u[i]*u[i]*u[i]*u[i] - 15*u[i]*u[i]*u[i] +
-                                   9*u[i]*u[i] + u[i] + 1);
-            beta[i][3] = -0.5*(u[i] - 1)*u[i]*u[i]*u[i]*(2*u[i] - 3);
+            beta[i][0] = (0.5*pow(u[i] - 1,3)*u[i]*(2*u[i] + 1));
+            beta[i][1] = (-0.5*(u[i] - 1)*(6*pow(u[i],4) - 9*pow(u[i],3) + 2*u[i] + 2));
+            beta[i][2] = (0.5*u[i]*(6*pow(u[i],4) - 15*pow(u[i],3) + 9*pow(u[i],2) + u[i] + 1));
+            beta[i][3] = (-0.5*(u[i] - 1)*pow(u[i],3)*(2*u[i] - 3));
         }
 
         // loop over all the considered points (n-dimensional) and multiply the
@@ -358,53 +406,29 @@ public:
         }
 
         double z = 0;
-        bool breakWhile = false;
-        bool allTrue;
         double Beta = 1;
-        while (discrLoopCnt[0] < 3) {
+        for (int cnt=0; cnt<pow(4,dimensions); cnt++){
             Beta = 1;
-            for (int i = 0; i < dimensions; i++) {
-                Beta = Beta * beta[i][discrLoopCnt[i]+1];
+            for (int i=0; i<dimensions; i++){
+                Beta *= beta[i][discrLoopCnt[i]+1];
             }
 
-            for (int i = 0; i < dimensions; i++) {
+            for (int i=0; i<dimensions; i++){
                 loc[i] = discrLoopCnt[i] + n[i];
             }
 
-            z += getEval() * Beta;
+            z += getEval()*Beta;
 
-            // from the back to the front, check if we're already at the maximum
-            // iteration on that 'nested' for loop or else increment with 1.
-            // In short, everything starts with [-1,-1,-1,...] and we keep adding
-            // ones until the array of the loops becomes [ 2, 2, 2, ...]
-            for (int x = dimensions-1; x >= 0; x--) {
-                if (discrLoopCnt[x] != 2) {
+            for (int x=dimensions-1; x>=0; x--){
+                if (discrLoopCnt[x] != 2){
                     discrLoopCnt[x] += 1;
                     break;
                 }
-                if (discrLoopCnt[x] == 2) {
-                    for (int y = x; y < dimensions; y++) {
+                if (discrLoopCnt[x] == 2){
+                    for (int y=x; y<dimensions; y++){
                         discrLoopCnt[y] = -1;
                     }
                 }
-            }
-
-            // checking exit conditions
-            if (breakWhile) {
-                break;
-            }
-
-            // loop through to check whether all are at max cnt or not
-            allTrue = true;
-            for (int i = 0; i < dimensions; i++) {
-                if (discrLoopCnt[i] != 2){
-                    allTrue = false;
-                    break;
-                }
-            }
-            // if all true (all are 2) set breakWhile to break on the next iteration
-            if (allTrue) {
-                breakWhile = true;
             }
         }
         return z;
@@ -430,7 +454,7 @@ public:
     // 1st derivative
     double getInterpDer(const std::vector<double>& x,
                         int coordinate,
-                        double h = 0.0001) {
+                        double h = 0.001) {
 
         assert(x.size() == dimensions);
         assert(coordinate <= dimensions-1);
@@ -480,7 +504,6 @@ public:
 
             lengtheningSpeed += firstDeriv * coordinateSpeedVal;
         }
-
         return lengtheningSpeed;
     }
 };
@@ -758,12 +781,8 @@ static std::vector<const OpenSim::Coordinate*> readInterpCoords(const std::strin
     std::vector<const OpenSim::Coordinate*> coords;
     for (std::string coord : coordinates){
         const OpenSim::Component& comp = root.getComponent(coord);
-        std::cerr << "coord: " << coord << std::endl;
-        std::cerr << "comp.getabsolutepathstring: " << comp.getAbsolutePathString() << std::endl;
-        std::cerr << "comp.getconreteclassname: " << comp.getConcreteClassName() << std::endl;
         if (comp.getAbsolutePathString() == coord){
             const OpenSim::Coordinate* c = dynamic_cast<const OpenSim::Coordinate*>(&comp);
-            std::cerr << "c.name: " << c->getName() << std::endl;
             coords.push_back(c);
         }
     }
@@ -778,7 +797,6 @@ OpenSim::FunctionBasedPath OpenSim::FunctionBasedPath::fromDataFile(const std::s
     // the data file effectively only contains data for Interpolate, data file
     // spec is in there
     fbp._impl->interp = readInterp(path);
-//    this->finalizeConnections();
 
     return fbp;
 }
@@ -802,8 +820,6 @@ void OpenSim::FunctionBasedPath::extendFinalizeFromProperties()
 
     if (hasBackingFile) {
         // load the file, always
-        //
-        // TODO: this should ideally be cached
         _impl->interp = readInterp(get_data_path());
     } else if (hasInMemoryFittingData) {
         // do nothing: just use the already-loaded in-memory fitting data
@@ -818,8 +834,6 @@ void OpenSim::FunctionBasedPath::extendFinalizeFromProperties()
 
 void OpenSim::FunctionBasedPath::extendFinalizeConnections(OpenSim::Component &root)
 {
-//    Super::extendFinalizeConnections(root);
-
     Model* model = dynamic_cast<Model*>(&root);
     // Allow (model) component to include its own subcomponents
     // before calling the base method which automatically invokes
@@ -849,7 +863,6 @@ double OpenSim::FunctionBasedPath::getLength(const SimTK::State& s) const
         return getCacheVariableValue(s, _lengthCV);
     }
 
-    // else: compute it
     double rv = _impl->interp.getLength(s);
     setCacheVariableValue(s, _lengthCV, rv);
     return rv;
@@ -866,7 +879,6 @@ double OpenSim::FunctionBasedPath::getLengtheningSpeed(const SimTK::State& s) co
         return getCacheVariableValue(s, _speedCV);
     }
 
-    // else: compute it
     double rv = _impl->interp.getLengtheningSpeed(s);
     setCacheVariableValue(s, _speedCV, rv);
     return rv;
@@ -916,63 +928,3 @@ void OpenSim::FunctionBasedPath::printContent(std::ostream& out) const
 
     out.flush();
 }
-
-
-
-//// Constructor for non FBP/PBP related interpolation
-//Interpolate(
-//        std::vector<std::vector<double>> discretizationIn,
-//        std::vector<std::pair<std::vector<int>,double>> evalsPair) :
-
-//    dimensions(static_cast<int>(discretizationIn.size())),
-//    discretizations(discretizationIn),
-//    n(dimensions,0),
-//    u(dimensions,0),
-//    loc(dimensions,0)
-//{
-//    assert(discretizations.size() == evalsPair[0].first.size());
-
-//    // allow it to work with the new struct method
-//    for (int i = 0; i < dimensions; i++) {
-//        Discretization dc;
-//        dc.begin = discretizations[i][0];
-//        dc.end = discretizations[i][discretizations[i].size()-1];
-//        dc.nPoints = static_cast<int>(discretizations[i].size());
-//        dc.gridsize = (dc.end - dc.begin)/(dc.nPoints-1);
-
-//        dS.push_back(dc);
-//    }
-
-//    for (int i = 0; i < dimensions; i++) {
-//        beta.push_back({0,0,0,0});
-//        discSizes.push_back(discretizations[i].size());
-//    }
-
-//    // I'm aware this is still stupid but it is what it is for now
-//    int numOfLoops = 1;
-//    for (int i = 0; i < dimensions; i++) {
-//        numOfLoops *= discretizations[i].size();
-//    }
-
-//    std::vector<int> cnt(dimensions, 0);
-//    for (int i = 0; i < numOfLoops; i++) {
-//        for (unsigned k = 0; k < evalsPair.size(); k++) {
-//            if (evalsPair[k].first == cnt) {
-//                evals.push_back(evalsPair[k].second);
-//            }
-//        }
-
-//        for (int x = dimensions - 1; x >= 0; x--) {
-//            if (cnt[x] != dS[x].nPoints-1) {
-//                cnt[x] += 1;
-//                break;
-//            }
-
-//            if (cnt[x] == dS[x].nPoints-1) {
-//                for (int y = x; y < dimensions; y++) {
-//                    cnt[y] = 0;
-//                }
-//            }
-//        }
-//    }
-//}

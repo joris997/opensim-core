@@ -41,7 +41,7 @@ bool FunctionBasedPathConversionTool::run(){
         outputModel.finalizeConnections();
         outputModel.finalizeFromProperties();
 
-        bool verbose = true;
+        bool verbose = false;
         if (verbose) {
             sourceModel.printSubcomponentInfo();
         }
