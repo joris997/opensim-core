@@ -83,7 +83,8 @@ public:
     OpenSim_DECLARE_UNNAMED_PROPERTY(Appearance,
         "Default appearance attributes for this GeometryPath");
 
-private:
+// from private to public because now required in PBP
+public:
     OpenSim_DECLARE_UNNAMED_PROPERTY(PathPointSet,
         "The set of points defining the path");
 
@@ -109,34 +110,9 @@ protected:
 //=============================================================================
 public:
     GeometryPath();
-
-    const PathPointSet& getPathPointSet() const { return get_PathPointSet(); }
-    void setPathPointSet(const PathPointSet& pps) { upd_PathPointSet() = pps; }
-    PathPointSet& updPathPointSet() { return upd_PathPointSet(); }
-
-    const PathWrapSet& getWrapSet() const { return get_PathWrapSet(); }
-    void setPathWrapSet(const PathWrapSet& pws) { upd_PathWrapSet() = pws; }
-    PathWrapSet& updWrapSet() { return upd_PathWrapSet(); }
-    void addPathWrap(WrapObject& aWrapObject);
-
     //--------------------------------------------------------------------------
     // UTILITY
     //--------------------------------------------------------------------------
-    const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const;
-    AbstractPathPoint* addPathPoint(const SimTK::State& s, int index,
-        const PhysicalFrame& frame);
-    AbstractPathPoint* appendNewPathPoint(const std::string& proposedName, 
-        const PhysicalFrame& frame, const SimTK::Vec3& locationOnFrame);
-    bool canDeletePathPoint(int index);
-    bool deletePathPoint(const SimTK::State& s, int index);
-    bool replacePathPoint(const SimTK::State& s,
-                          AbstractPathPoint* oldPathPoint,
-                          AbstractPathPoint* newPathPoint);
-
-    void moveUpPathWrap(const SimTK::State& s, int index);
-    void moveDownPathWrap(const SimTK::State& s, int index);
-    void deletePathWrap(const SimTK::State& s, int index);
-
     /** If you call this prior to extendAddToSystem() it will be used to initialize
     the color cache variable. Otherwise %GeometryPath will choose its own
     default which varies depending on owner. **/
@@ -177,8 +153,8 @@ public:
 
     /** get the path as PointForceDirections directions, which can be used
         to apply tension to bodies the points are connected to.*/
-    void getPointForceDirections(const SimTK::State& s, 
-        OpenSim::Array<PointForceDirection*> *rPFDs) const;
+    virtual void getPointForceDirections(const SimTK::State& s,
+        OpenSim::Array<PointForceDirection*> *rPFDs) const = 0;
 
     /** add in the equivalent body and generalized forces to be applied to the 
         multibody system resulting from a tension along the GeometryPath 
@@ -187,16 +163,17 @@ public:
     @param[in,out] bodyForces   Vector of SpatialVec's (torque, force) on bodies
     @param[in,out] mobilityForces  Vector of generalized forces, one per mobility   
     */
-    void addInEquivalentForces(const SimTK::State& state,
-                               const double& tension, 
-                               SimTK::Vector_<SimTK::SpatialVec>& bodyForces,
-                               SimTK::Vector& mobilityForces) const;
+    virtual void addInEquivalentForces(const SimTK::State& state,
+                                       const double& tension,
+                                       SimTK::Vector_<SimTK::SpatialVec>& bodyForces,
+                                       SimTK::Vector& mobilityForces) const = 0;
 
 
     //--------------------------------------------------------------------------
     // COMPUTATIONS
     //--------------------------------------------------------------------------
-    virtual double computeMomentArm(const SimTK::State& s, const Coordinate& aCoord) const = 0;
+    virtual double computeMomentArm(const SimTK::State& s,
+                                    const Coordinate& aCoord) const = 0;
 
     //--------------------------------------------------------------------------
     // SCALING
@@ -224,36 +201,71 @@ protected:
     void extendInitStateFromProperties(SimTK::State& s) const override;
     void extendAddToSystem(SimTK::MultibodySystem& system) const override;
 
-    // Visual support GeometryPath drawing in SimTK visualizer.
-    void generateDecorations(
-            bool                                        fixed,
-            const ModelDisplayHints&                    hints,
-            const SimTK::State&                         state,
-            SimTK::Array_<SimTK::DecorativeGeometry>&   appendToThis) const
-            override;
-
     void extendFinalizeFromProperties() override;
 
 protected:
+    virtual void computePath(const SimTK::State& s ) const = 0;
 
-    void computePath(const SimTK::State& s ) const;
-    void computeLengtheningSpeed(const SimTK::State& s) const;
-    void applyWrapObjects(const SimTK::State& s, Array<AbstractPathPoint*>& path ) const;
-    double calcPathLengthChange(const SimTK::State& s, const WrapObject& wo, 
-                                const WrapResult& wr, 
-                                const Array<AbstractPathPoint*>& path) const; 
-    double calcLengthAfterPathComputation
-       (const SimTK::State& s, const Array<AbstractPathPoint*>& currentPath) const;
+    virtual double calcLengthAfterPathComputation(
+            const SimTK::State&              s,
+            const Array<AbstractPathPoint*>& currentPath) const = 0;
+
+    virtual void generateDecorations(
+            bool                                      fixed,
+            const ModelDisplayHints&                  hints,
+            const SimTK::State&                       state,
+            SimTK::Array_<SimTK::DecorativeGeometry>& appendToThis) const override = 0;
 
     void constructProperties();
-    void namePathPoints(int aStartingIndex);
-    void placeNewPathPoint(const SimTK::State& s, SimTK::Vec3& aOffset, 
-                           int index, const PhysicalFrame& frame);
     //--------------------------------------------------------------------------
     // Implement Object interface.
     //--------------------------------------------------------------------------
     /** Override of the default implementation to account for versioning. */
-    void updateFromXMLNode(SimTK::Xml::Element& aNode, int versionNumber = -1) override;
+    void updateFromXMLNode(
+            SimTK::Xml::Element& aNode,
+            int versionNumber = -1) override;
+
+
+
+
+// related to pathpoints, so has to be removed in release
+protected:
+    virtual double calcPathLengthChange(const SimTK::State& s, const WrapObject& wo,
+                                const WrapResult& wr,
+                                const Array<AbstractPathPoint*>& path) const = 0;
+    virtual void computeLengtheningSpeed(const SimTK::State& s) const = 0;
+
+public:
+    const PathPointSet& getPathPointSet() const { return get_PathPointSet(); }
+    void setPathPointSet(const PathPointSet& pps) { upd_PathPointSet() = pps; }
+    PathPointSet& updPathPointSet() { return upd_PathPointSet(); }
+
+    const PathWrapSet& getWrapSet() const { return get_PathWrapSet(); }
+    void setPathWrapSet(const PathWrapSet& pws) { upd_PathWrapSet() = pws; }
+    PathWrapSet& updWrapSet() { return upd_PathWrapSet(); }
+    virtual void addPathWrap(WrapObject& aWrapObject) = 0;
+
+public:
+    virtual const Array<AbstractPathPoint*>& getCurrentPath( const SimTK::State& s) const = 0;
+    virtual AbstractPathPoint* addPathPoint(const SimTK::State& s, int index,
+        const PhysicalFrame& frame) = 0;
+    virtual AbstractPathPoint* appendNewPathPoint(const std::string& proposedName,
+        const PhysicalFrame& frame, const SimTK::Vec3& locationOnFrame) = 0;
+    virtual bool canDeletePathPoint(int index) = 0;
+    virtual bool deletePathPoint(const SimTK::State& s, int index) = 0;
+    virtual bool replacePathPoint(const SimTK::State& s,
+                          AbstractPathPoint* oldPathPoint,
+                          AbstractPathPoint* newPathPoint) = 0;
+
+    virtual void moveUpPathWrap(const SimTK::State& s, int index) = 0;
+    virtual void moveDownPathWrap(const SimTK::State& s, int index) = 0;
+    virtual void deletePathWrap(const SimTK::State& s, int index) = 0;
+
+    virtual void applyWrapObjects(const SimTK::State& s, Array<AbstractPathPoint*>& path ) const = 0;
+
+    virtual void namePathPoints(int aStartingIndex) = 0;
+    virtual void placeNewPathPoint(const SimTK::State& s, SimTK::Vec3& aOffset,
+                           int index, const PhysicalFrame& frame) = 0;
 
 //=============================================================================
 };  // END of class GeometryPath

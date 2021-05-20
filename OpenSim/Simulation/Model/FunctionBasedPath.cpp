@@ -1,4 +1,9 @@
+#include "GeometryPath.h"
+#include "ConditionalPathPoint.h"
 #include "FunctionBasedPath.h"
+#include "MovingPathPoint.h"
+#include "PointForceDirection.h"
+#include <OpenSim/Simulation/Wrap/PathWrap.h>
 
 #include <OpenSim/Simulation/Model/Model.h>
 #include <OpenSim/Simulation/Model/PointBasedPath.h>
@@ -12,6 +17,11 @@
 #include <algorithm>
 #include <numeric>
 #include <sstream>
+
+using namespace std;
+using namespace OpenSim;
+using namespace SimTK;
+using SimTK::Vec3;
 
 template <typename T>
 void printVector(std::vector<T> vec){
@@ -927,4 +937,194 @@ void OpenSim::FunctionBasedPath::printContent(std::ostream& out) const
     }
 
     out.flush();
+}
+
+
+
+
+
+
+
+
+
+////////////////////////////////
+// Directly from GeometryPath //
+////////////////////////////////
+/* add in the equivalent spatial forces on bodies for an applied tension
+    along the GeometryPath to a set of bodyForces */
+void OpenSim::FunctionBasedPath::addInEquivalentForces(const SimTK::State& s,
+    const double& tension,
+    SimTK::Vector_<SimTK::SpatialVec>& bodyForces,
+    SimTK::Vector& mobilityForces) const
+{
+    double ma;
+    double torqueOverCoord;
+
+    std::vector<const OpenSim::Coordinate*> coords = _impl->interp.getCoords();
+    for (unsigned i=0; i<coords.size(); i++){
+        ma = computeMomentArm(s,*coords[i]);
+        torqueOverCoord = tension*ma;
+
+        mobilityForces.set(i,torqueOverCoord);
+    }
+}
+
+// get the path as PointForceDirections directions
+// CAUTION: the return points are heap allocated; you must delete them yourself!
+// (TODO: that is really lame)
+void OpenSim::FunctionBasedPath::
+getPointForceDirections(const SimTK::State& s,
+                        OpenSim::Array<PointForceDirection*> *rPFDs) const
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+//_____________________________________________________________________________
+/*
+ * Calculate the current path.
+ */
+void OpenSim::FunctionBasedPath::computePath(const SimTK::State& s) const
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+//_____________________________________________________________________________
+/*
+ * Compute the total length of the path. This function
+ * assumes that the path has already been updated.
+ */
+double OpenSim::FunctionBasedPath::
+calcLengthAfterPathComputation(const SimTK::State& s,
+                               const Array<AbstractPathPoint*>& currentPath) const
+{
+    double length = getLength(s);
+    setLength(s,length);
+    return( length );
+}
+
+void OpenSim::FunctionBasedPath::
+computeLengtheningSpeed(const SimTK::State& s) const
+{
+    double lengtheningspeed = getLengtheningSpeed(s);
+    setLengtheningSpeed(s,lengtheningspeed);
+}
+
+//------------------------------------------------------------------------------
+//                         GENERATE DECORATIONS
+//------------------------------------------------------------------------------
+// The GeometryPath takes care of drawing itself here, using information it
+// can extract from the supplied state, including position information and
+// color information that may have been calculated as late as Stage::Dynamics.
+// For example, muscles may want the color to reflect activation level and
+// other path-using components might want to use forces (tension). We will
+// ensure that the state has been realized to Stage::Dynamics before looking
+// at it. (It is only guaranteed to be at Stage::Position here.)
+void OpenSim::FunctionBasedPath::
+generateDecorations(bool fixed, const ModelDisplayHints& hints,
+                    const SimTK::State& state,
+                    SimTK::Array_<SimTK::DecorativeGeometry>& appendToThis) const
+{
+    std::cerr << "generateDecorations() called on a FunctionBasedPath";
+    std::cerr << "which has no implementation yet";
+    std::cerr << "call will be therefore be ignored" << std::endl;
+    // todo
+}
+
+
+//----------------------------------------------------------------------------
+//                          VIRTUAL METHODS EMPTY DEFINED
+//----------------------------------------------------------------------------
+double OpenSim::FunctionBasedPath::calcPathLengthChange(const SimTK::State& s,
+                                                        const WrapObject& wo,
+                                                        const WrapResult& wr,
+                                                        const Array<AbstractPathPoint*>& path) const
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+void OpenSim::FunctionBasedPath::addPathWrap(WrapObject& aWrapObject)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+
+const Array<AbstractPathPoint*>& OpenSim::FunctionBasedPath::getCurrentPath( const SimTK::State& s) const
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+AbstractPathPoint* OpenSim::FunctionBasedPath::addPathPoint(const SimTK::State& s, int index,
+                                                            const PhysicalFrame& frame)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+AbstractPathPoint* OpenSim::FunctionBasedPath::appendNewPathPoint(const std::string& proposedName,
+                                                                  const PhysicalFrame& frame,
+                                                                  const SimTK::Vec3& locationOnFrame)
+{
+    std::cerr << "appendNewPathPoint called on a FunctionBasedPath";
+    std::cerr << "call will be ignored" << std::endl;
+//    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+    return nullptr;
+}
+
+bool OpenSim::FunctionBasedPath::canDeletePathPoint(int index)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+bool OpenSim::FunctionBasedPath::deletePathPoint(const SimTK::State& s,
+                                                 int index)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+bool OpenSim::FunctionBasedPath::replacePathPoint(const SimTK::State& s,
+                                                  AbstractPathPoint* oldPathPoint,
+                                                  AbstractPathPoint* newPathPoint)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+
+void OpenSim::FunctionBasedPath::moveUpPathWrap(const SimTK::State& s,
+                                                int index)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+void OpenSim::FunctionBasedPath::moveDownPathWrap(const SimTK::State& s,
+                                                  int index)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+void OpenSim::FunctionBasedPath::deletePathWrap(const SimTK::State& s,
+                                                int index)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+
+void OpenSim::FunctionBasedPath::applyWrapObjects(const SimTK::State& s,
+                                                  Array<AbstractPathPoint*>& path ) const
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+
+void OpenSim::FunctionBasedPath::namePathPoints(int aStartingIndex)
+{
+    std::cerr << "namePathPoints(int index) called on a FunctionBasedPath";
+    std::cerr << "call will be ignored" << std::endl;
+//    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
+}
+
+void OpenSim::FunctionBasedPath::placeNewPathPoint(const SimTK::State& s,
+                                                   SimTK::Vec3& aOffset,
+                                                   int index,
+                                                   const PhysicalFrame& frame)
+{
+    OPENSIM_THROW(Exception,"this method is not allowed within FunctionBasedPath");
 }
