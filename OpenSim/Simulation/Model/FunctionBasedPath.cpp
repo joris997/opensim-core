@@ -960,12 +960,18 @@ void OpenSim::FunctionBasedPath::addInEquivalentForces(const SimTK::State& s,
     double ma;
     double torqueOverCoord;
 
+    const SimTK::SimbodyMatterSubsystem& matter =
+                                        getModel().getMatterSubsystem();
+
     std::vector<const OpenSim::Coordinate*> coords = _impl->interp.getCoords();
     for (unsigned i=0; i<coords.size(); i++){
         ma = computeMomentArm(s,*coords[i]);
         torqueOverCoord = tension*ma;
 
-        mobilityForces.set(i,torqueOverCoord);
+        matter.addInMobilityForce(s,
+                                  SimTK::MobilizedBodyIndex(coords[i]->getBodyIndex()),
+                                  SimTK::MobilizerUIndex(coords[i]->getMobilizerQIndex()),
+                                  torqueOverCoord,mobilityForces);
     }
 }
 
