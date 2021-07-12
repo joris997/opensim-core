@@ -257,8 +257,10 @@ public:
         Discretization dc;
         for (int i = 0; i < dimensions; i++) {
             const OpenSim::Coordinate& c = *cBegin[i];
-            dc.begin = std::max(c.getRangeMin(), -static_cast<double>(SimTK_PI));
-            dc.end = std::min(c.getRangeMax(), static_cast<double>(SimTK_PI));
+            dc.begin = -static_cast<double>(SimTK_PI)/2;
+            dc.end = static_cast<double>(SimTK_PI)/2;
+//            dc.begin = std::max(c.getRangeMin(), -static_cast<double>(SimTK_PI));
+//            dc.end = std::min(c.getRangeMax(), static_cast<double>(SimTK_PI));
             dc.nPoints = nPoints[i];
             dc.gridsize = (dc.end - dc.begin) / (dc.nPoints - 1);
             dS.push_back(dc);
@@ -464,7 +466,7 @@ public:
     // 1st derivative
     double getInterpDer(const std::vector<double>& x,
                         int coordinate,
-                        double h = 0.001) {
+                        double h = 0.0001) {
 
         assert(x.size() == dimensions);
         assert(coordinate <= dimensions-1);
@@ -501,7 +503,7 @@ public:
                 return getInterpDer(s, i);
             }
         }
-
+        OPENSIM_THROW(OpenSim::Exception,"could not find coordinate in getInterpDer based on given coord argument")
         return 0.0;
     }
 
@@ -957,16 +959,14 @@ void OpenSim::FunctionBasedPath::addInEquivalentForces(const SimTK::State& s,
     SimTK::Vector_<SimTK::SpatialVec>& bodyForces,
     SimTK::Vector& mobilityForces) const
 {
-    double ma;
-    double torqueOverCoord;
-
     const SimTK::SimbodyMatterSubsystem& matter =
                                         getModel().getMatterSubsystem();
 
     std::vector<const OpenSim::Coordinate*> coords = _impl->interp.getCoords();
     for (unsigned i=0; i<coords.size(); i++){
-        ma = computeMomentArm(s,*coords[i]);
-        torqueOverCoord = tension*ma;
+        double ma = computeMomentArm(s,*coords[i]);
+//        std::cout << "momentArm in addInEquivalentForces: " << ma << std::endl;
+        double torqueOverCoord = -tension*ma;
 
         matter.addInMobilityForce(s,
                                   SimTK::MobilizedBodyIndex(coords[i]->getBodyIndex()),
@@ -1004,7 +1004,7 @@ calcLengthAfterPathComputation(const SimTK::State& s,
                                const Array<AbstractPathPoint*>& currentPath) const
 {
     double length = getLength(s);
-    setLength(s,length);
+//    setLength(s,length);
     return( length );
 }
 
